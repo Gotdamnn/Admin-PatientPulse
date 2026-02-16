@@ -562,5 +562,5 @@ function closeLogoutModal() {
 function confirmLogout() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = 'login.html';
+    window.location.href = '/login';
 }

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const notification = document.querySelector('.notification');
     if (notification) {
         notification.addEventListener('click', function () {
-            window.location.href = './alerts.html';
+            window.location.href = '/alerts';
         });
     }
 });
@@ -228,7 +228,7 @@ function closeLogoutModal() {
 function confirmLogout() {
     localStorage.removeItem('userSession');
     sessionStorage.clear();
-    window.location.href = './login.html';
+    window.location.href = '/login';
 }
 
 // Close modal when clicking outside

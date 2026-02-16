@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS admins (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Insert default admin user
+INSERT INTO admins (email, password, name) VALUES
+    ('patientpulse@admin.com', '$2b$10$rsv.fQHdC6adDd7bWqN3aeymdi7HMFAX4LcBsihTWZ6i8oV8MNwxy', 'Admin User')
+ON CONFLICT (email) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS patients (
     id SERIAL PRIMARY KEY,
     patient_id SERIAL UNIQUE NOT NULL,
@@ -48,9 +53,158 @@ CREATE TABLE IF NOT EXISTS alerts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Departments table (referenced by employees)
+CREATE TABLE IF NOT EXISTS departments (
+    department_id SERIAL PRIMARY KEY,
+    department_name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    
+    -- Department Head (FK to employees - added after employees table created)
+    department_head_id INTEGER,
+    
+    -- Status
+    status VARCHAR(20) CHECK (status IN ('Active', 'Inactive', 'Archived')) DEFAULT 'Active',
+    
+    -- Location Info
+    location_building VARCHAR(100),
+    location_floor VARCHAR(50),
+    location_room VARCHAR(50),
+    
+    -- Contact Info
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(20),
+    
+    -- Budget Info
+    budget_annual DECIMAL(15, 2) DEFAULT 0,
+    budget_spent DECIMAL(15, 2) DEFAULT 0,
+    
+    -- Hierarchy (for sub-departments)
+    parent_department_id INTEGER REFERENCES departments(department_id) ON DELETE SET NULL,
+    
+    -- Operating Hours
+    operating_hours_start TIME,
+    operating_hours_end TIME,
+    operating_days VARCHAR(100) DEFAULT 'Mon-Fri',
+    
+    -- Accounting
+    cost_center_code VARCHAR(50),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add foreign key for department_head_id after employees table is created
+-- ALTER TABLE departments ADD CONSTRAINT fk_department_head FOREIGN KEY (department_head_id) REFERENCES employees(employee_id) ON DELETE SET NULL;
+
+-- Insert default departments
+INSERT INTO departments (department_name, description, status, location_building, contact_email, budget_annual, operating_hours_start, operating_hours_end, cost_center_code) VALUES
+    ('Emergency', 'Emergency Department - 24/7 critical care services', 'Active', 'Main Building', 'emergency@patientpulse.com', 500000.00, '00:00', '23:59', 'CC-001'),
+    ('Surgery', 'Surgical Department - All surgical procedures', 'Active', 'Main Building', 'surgery@patientpulse.com', 750000.00, '06:00', '22:00', 'CC-002'),
+    ('Pediatrics', 'Pediatric Department - Child healthcare services', 'Active', 'Building B', 'pediatrics@patientpulse.com', 300000.00, '08:00', '18:00', 'CC-003'),
+    ('Cardiology', 'Cardiology Department - Heart and cardiovascular care', 'Active', 'Main Building', 'cardiology@patientpulse.com', 600000.00, '07:00', '19:00', 'CC-004'),
+    ('Neurology', 'Neurology Department - Brain and nervous system care', 'Active', 'Building C', 'neurology@patientpulse.com', 450000.00, '08:00', '18:00', 'CC-005'),
+    ('Radiology', 'Radiology Department - Medical imaging services', 'Active', 'Main Building', 'radiology@patientpulse.com', 400000.00, '00:00', '23:59', 'CC-006'),
+    ('Laboratory', 'Laboratory Department - Medical testing and analysis', 'Active', 'Building D', 'lab@patientpulse.com', 350000.00, '00:00', '23:59', 'CC-007'),
+    ('Pharmacy', 'Pharmacy Department - Medication dispensing', 'Active', 'Main Building', 'pharmacy@patientpulse.com', 200000.00, '07:00', '21:00', 'CC-008'),
+    ('Administration', 'Administrative Department - Hospital management', 'Active', 'Admin Building', 'admin@patientpulse.com', 150000.00, '08:00', '17:00', 'CC-009'),
+    ('IT', 'Information Technology Department - Technical support', 'Active', 'Admin Building', 'it@patientpulse.com', 250000.00, '08:00', '18:00', 'CC-010'),
+    ('HR', 'Human Resources Department - Employee management', 'Active', 'Admin Building', 'hr@patientpulse.com', 120000.00, '08:00', '17:00', 'CC-011'),
+    ('Finance', 'Finance Department - Financial management', 'Active', 'Admin Building', 'finance@patientpulse.com', 100000.00, '08:00', '17:00', 'CC-012')
+ON CONFLICT (department_name) DO NOTHING;
+
+-- Employees table with comprehensive schema
+CREATE TABLE IF NOT EXISTS employees (
+    -- Primary Key
+    employee_id SERIAL PRIMARY KEY,
+    
+    -- Identification
+    employee_number VARCHAR(20) UNIQUE,
+    
+    -- Personal Info
+    first_name VARCHAR(100) NOT NULL,
+    middle_name VARCHAR(100),
+    last_name VARCHAR(100) NOT NULL,
+    gender VARCHAR(20) CHECK (gender IN ('Male', 'Female', 'Other', 'Prefer not to say')),
+    date_of_birth DATE,
+    
+    -- Contact Info
+    email VARCHAR(255) UNIQUE,
+    phone_number VARCHAR(20),
+    address TEXT,
+    
+    -- Work Information
+    department_id INTEGER REFERENCES departments(department_id),
+    job_title VARCHAR(100) CHECK (job_title IN ('Doctor', 'Nurse', 'Admin Staff', 'HR', 'IT', 'Technician', 'Pharmacist', 'Receptionist', 'Other')),
+    employment_type VARCHAR(50) CHECK (employment_type IN ('Full-time', 'Part-time', 'Contract')),
+    hire_date DATE,
+    employment_status VARCHAR(50) CHECK (employment_status IN ('Active', 'Inactive', 'On Leave', 'Resigned')) DEFAULT 'Active',
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Auto-generate employee_number using trigger
+-- Format: DEPT-YEAR-SEQ (e.g., EMR-2026-001)
+CREATE OR REPLACE FUNCTION generate_employee_number()
+RETURNS TRIGGER AS $$
+DECLARE
+    dept_code VARCHAR(3);
+    hire_year VARCHAR(4);
+    seq_num INTEGER;
+    dept_name VARCHAR(100);
+BEGIN
+    -- Get department name
+    SELECT department_name INTO dept_name 
+    FROM departments 
+    WHERE department_id = NEW.department_id;
+    
+    -- Create 3-letter department code (uppercase first 3 letters)
+    IF dept_name IS NOT NULL THEN
+        dept_code := UPPER(SUBSTRING(REGEXP_REPLACE(dept_name, '[^A-Za-z]', '', 'g') FROM 1 FOR 3));
+    ELSE
+        dept_code := 'GEN'; -- General if no department
+    END IF;
+    
+    -- Get hire year (default to current year if not provided)
+    IF NEW.hire_date IS NOT NULL THEN
+        hire_year := EXTRACT(YEAR FROM NEW.hire_date)::TEXT;
+    ELSE
+        hire_year := EXTRACT(YEAR FROM CURRENT_DATE)::TEXT;
+    END IF;
+    
+    -- Get next sequence number for this department and year
+    SELECT COALESCE(MAX(
+        CASE 
+            WHEN employee_number ~ ('^' || dept_code || '-' || hire_year || '-[0-9]+$')
+            THEN CAST(SUBSTRING(employee_number FROM LENGTH(dept_code) + LENGTH(hire_year) + 3) AS INTEGER)
+            ELSE 0
+        END
+    ), 0) + 1 INTO seq_num
+    FROM employees
+    WHERE employee_number LIKE dept_code || '-' || hire_year || '-%';
+    
+    -- Generate the employee number
+    NEW.employee_number := dept_code || '-' || hire_year || '-' || LPAD(seq_num::TEXT, 3, '0');
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_generate_employee_number ON employees;
+CREATE TRIGGER trigger_generate_employee_number
+    BEFORE INSERT ON employees
+    FOR EACH ROW
+    WHEN (NEW.employee_number IS NULL)
+    EXECUTE FUNCTION generate_employee_number();
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_patients_status ON patients(status);
 CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
 CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
 CREATE INDEX IF NOT EXISTS idx_alerts_patient_id ON alerts(patient_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id);
+CREATE INDEX IF NOT EXISTS idx_employees_job_title ON employees(job_title);
+CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(employment_status);
+CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);

@@ -242,9 +242,30 @@ function updateAlertCounts() {
 
 // Logout functionality
 function handleLogout() {
-    if (confirm('Are you sure you want to log out?')) {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = 'login.html';
+    showLogoutModal();
+}
+
+// Show logout confirmation modal
+function showLogoutModal() {
+    const modal = document.getElementById('logoutModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
     }
+}
+
+// Close logout modal
+function closeLogoutModal() {
+    const modal = document.getElementById('logoutModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
+}
+
+// Confirm logout
+function confirmLogout() {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/login';
 }

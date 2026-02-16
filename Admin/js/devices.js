@@ -522,20 +522,24 @@ function closeViewDeviceModal() {
 // Logout modal functions
 function showLogoutModal() {
     const modal = document.getElementById('logoutModal');
-    modal.classList.add('show');
-    modal.style.display = 'flex';
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
 }
 
 function closeLogoutModal() {
     const modal = document.getElementById('logoutModal');
-    modal.classList.remove('show');
-    modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
 }
 
 function confirmLogout() {
     localStorage.removeItem('userSession');
     sessionStorage.clear();
-    window.location.href = './login.html';
+    window.location.href = '/login';
 }
 
 // Close device modal

@@ -1,6 +1,23 @@
 // login.js
 // Handles login form submission and logo upload preview
 
+// Modal functions
+function showModal(title, message, isError = true) {
+    const modal = document.getElementById('errorModal');
+    const modalIcon = modal.querySelector('.modal-icon');
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMessage').textContent = message;
+    
+    modalIcon.className = isError ? 'modal-icon error' : 'modal-icon success';
+    modalIcon.innerHTML = isError ? '<i class="fas fa-exclamation-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+    
+    modal.style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('errorModal').style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // Logo upload preview
     const logoUpload = document.getElementById('logo-upload');
@@ -18,19 +35,39 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Login form submission (local only)
+    // Close modal on overlay click
+    const modal = document.getElementById('errorModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    // Login form submission
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
-        loginForm.addEventListener('submit', function (e) {
+        loginForm.addEventListener('submit', async function (e) {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            // Simple local check (demo)
-            if (email === 'admin@patientpulse.com' && password === 'password123') {
-                alert('Login successful!');
-                window.location.href = '../html/dashboard.html';
-            } else {
-                alert('Login failed! Use admin@patientpulse.com / password123');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    localStorage.setItem('userSession', JSON.stringify(data.user));
+                    window.location.href = '/dashboard';
+                } else {
+                    showModal('Login Failed', 'Invalid email or password. Please try again.');
+                }
+            } catch (error) {
+                showModal('Connection Error', 'Unable to connect to server. Please make sure the server is running.');
             }
         });
     }
