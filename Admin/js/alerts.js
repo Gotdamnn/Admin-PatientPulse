@@ -1,9 +1,15 @@
-// Alert Management Page Script with API Integration
+// Alert Management Page Script - Enhanced
 
 const API_BASE = 'http://localhost:3001/api';
 let alertsData = [];
-let currentFilter = 'all';
-let currentSort = 'timestamp';
+let filteredAlerts = [];
+let currentSeverityFilter = 'all';
+let currentStatusFilter = 'all';
+let currentCategoryFilter = 'all';
+let searchQuery = '';
+let currentPage = 1;
+const alertsPerPage = 10;
+let selectedAlertId = null;
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
@@ -13,21 +19,62 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Setup event listeners
 function setupEventListeners() {
+    const severityFilter = document.getElementById('severityFilter');
     const statusFilter = document.getElementById('statusFilter');
-    const sortBy = document.getElementById('sortBy');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const searchInput = document.getElementById('searchInput');
+    const prevPage = document.getElementById('prevPage');
+    const nextPage = document.getElementById('nextPage');
     const logoutBtn = document.querySelector('.logout-btn');
 
-    if (statusFilter) {
-        statusFilter.addEventListener('change', function(e) {
-            currentFilter = e.target.value;
-            renderAlerts();
+    if (severityFilter) {
+        severityFilter.addEventListener('change', (e) => {
+            currentSeverityFilter = e.target.value;
+            currentPage = 1;
+            applyFilters();
         });
     }
 
-    if (sortBy) {
-        sortBy.addEventListener('change', function(e) {
-            currentSort = e.target.value;
-            renderAlerts();
+    if (statusFilter) {
+        statusFilter.addEventListener('change', (e) => {
+            currentStatusFilter = e.target.value;
+            currentPage = 1;
+            applyFilters();
+        });
+    }
+
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', (e) => {
+            currentCategoryFilter = e.target.value;
+            currentPage = 1;
+            applyFilters();
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase();
+            currentPage = 1;
+            applyFilters();
+        });
+    }
+
+    if (prevPage) {
+        prevPage.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderAlerts();
+            }
+        });
+    }
+
+    if (nextPage) {
+        nextPage.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredAlerts.length / alertsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderAlerts();
+            }
         });
     }
 
@@ -35,22 +82,15 @@ function setupEventListeners() {
         logoutBtn.addEventListener('click', handleLogout);
     }
 
-    // Add event delegation for action buttons
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.action-btn.resolve')) {
-            const btn = e.target.closest('.action-btn.resolve');
-            const row = btn.closest('tr');
-            const alertId = parseInt(row.dataset.alertId);
-            markAlertResolved(alertId);
-        }
-
-        if (e.target.closest('.action-btn.details')) {
-            const btn = e.target.closest('.action-btn.details');
-            const row = btn.closest('tr');
-            const alertId = parseInt(row.dataset.alertId);
-            viewAlertDetails(alertId);
-        }
-    });
+    // Close modal on overlay click
+    const alertDetailModal = document.getElementById('alertDetailModal');
+    if (alertDetailModal) {
+        alertDetailModal.addEventListener('click', (e) => {
+            if (e.target === alertDetailModal) {
+                closeAlertModal();
+            }
+        });
+    }
 }
 
 // Load alerts from backend
@@ -58,186 +98,386 @@ async function loadAlerts() {
     try {
         const response = await fetch(`${API_BASE}/alerts`);
         if (response.ok) {
-            alertsData = await response.json();
-            renderAlerts();
+            const data = await response.json();
+            // Map API data to our format
+            alertsData = data.map(alert => ({
+                id: alert.id,
+                title: alert.title || alert.alert_type,
+                description: alert.description || `${alert.alert_type}: ${alert.values} (Normal: ${alert.normal_range})`,
+                severity: mapSeverity(alert.severity),
+                category: alert.category || 'system',
+                status: alert.status,
+                created_at: alert.created_at,
+                source: alert.source || 'System'
+            }));
         } else {
             console.error('Failed to load alerts');
+            alertsData = [];
         }
     } catch (error) {
         console.error('Error loading alerts:', error);
+        alertsData = [];
     }
+    
+    applyFilters();
 }
 
-// Render alerts based on filter and sort
-function renderAlerts() {
-    let filtered = filterAlerts(alertsData);
-    let sorted = sortAlerts(filtered);
-
-    const tbody = document.querySelector('.alerts-table tbody');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-
-    sorted.forEach(alert => {
-        const row = createAlertRow(alert);
-        tbody.appendChild(row);
-    });
-
-    updateAlertCounts();
-}
-
-// Filter alerts
-function filterAlerts(alerts) {
-    if (currentFilter === 'all') {
-        return alerts;
-    }
-    return alerts.filter(alert => alert.status === currentFilter || alert.severity === currentFilter);
-}
-
-// Sort alerts
-function sortAlerts(alerts) {
-    const sorted = [...alerts];
-
-    switch (currentSort) {
-        case 'timestamp':
-            sorted.sort((a, b) => {
-                const timeA = new Date(a.created_at);
-                const timeB = new Date(b.created_at);
-                return timeB - timeA; // Newest first
-            });
-            break;
-        case 'severity':
-            const severityOrder = { critical: 1, medium: 2, low: 3 };
-            sorted.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-            break;
-        case 'patient':
-            sorted.sort((a, b) => (a.patient_name || '').localeCompare(b.patient_name || ''));
-            break;
-    }
-
-    return sorted;
-}
-
-// Create alert row element
-function createAlertRow(alert) {
-    const row = document.createElement('tr');
-    row.classList.add('alert-row', alert.severity);
-    row.dataset.alertId = alert.id;
-
-    const iconClass = alert.severity === 'critical' ? 'critical-icon' : 
-                     alert.severity === 'medium' ? 'medium-icon' : 'resolved-icon';
-
-    const statusClass = alert.status === 'active' ? 'active' : 'resolved';
-
-    const timestamp = new Date(alert.created_at);
-    const dateStr = timestamp.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
-    const timeStr = timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-
-    const iconMapping = {
-        'High Temperature': 'fas fa-thermometer-full',
-        'Low Temperature': 'fas fa-thermometer-half',
-        'High Heart Rate': 'fas fa-heart',
-        'Low Heart Rate': 'fas fa-heart',
-        'High Blood Pressure': 'fas fa-tint',
-        'Low Blood Pressure': 'fas fa-tint',
-        'Low Oxygen Saturation': 'fas fa-lungs',
-        'Irregular Heart Rate': 'fas fa-heart-pulse'
+// Map severity values
+function mapSeverity(severity) {
+    const severityMap = {
+        'critical': 'critical',
+        'high': 'critical',
+        'medium': 'warning',
+        'warning': 'warning',
+        'low': 'info',
+        'info': 'info'
     };
+    return severityMap[severity?.toLowerCase()] || 'info';
+}
 
-    const iconClass2 = iconMapping[alert.alert_type] || 'fas fa-exclamation-circle';
+// Apply all filters
+function applyFilters() {
+    filteredAlerts = alertsData.filter(alert => {
+        // Severity filter
+        if (currentSeverityFilter !== 'all' && alert.severity !== currentSeverityFilter) {
+            return false;
+        }
+        
+        // Status filter
+        if (currentStatusFilter !== 'all' && alert.status !== currentStatusFilter) {
+            return false;
+        }
+        
+        // Category filter
+        if (currentCategoryFilter !== 'all' && alert.category !== currentCategoryFilter) {
+            return false;
+        }
+        
+        // Search filter
+        if (searchQuery) {
+            const searchFields = [
+                alert.title,
+                alert.description,
+                alert.category,
+                alert.source
+            ].join(' ').toLowerCase();
+            
+            if (!searchFields.includes(searchQuery)) {
+                return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    // Sort by created_at (newest first)
+    filteredAlerts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    renderAlerts();
+    updateStats();
+}
 
-    row.innerHTML = `
-        <td>
-            <div class="alert-patient">
-                <div class="alert-icon ${iconClass}">
-                    <i class="${iconClass2}"></i>
+// Render alerts
+function renderAlerts() {
+    const alertsGrid = document.getElementById('alertsGrid');
+    const alertsEmpty = document.getElementById('alertsEmpty');
+    const alertsCount = document.getElementById('alertsCount');
+    const paginationInfo = document.getElementById('paginationInfo');
+    const prevPage = document.getElementById('prevPage');
+    const nextPage = document.getElementById('nextPage');
+    
+    if (!alertsGrid) return;
+    
+    // Calculate pagination
+    const totalAlerts = filteredAlerts.length;
+    const totalPages = Math.ceil(totalAlerts / alertsPerPage);
+    const startIndex = (currentPage - 1) * alertsPerPage;
+    const endIndex = Math.min(startIndex + alertsPerPage, totalAlerts);
+    const paginatedAlerts = filteredAlerts.slice(startIndex, endIndex);
+    
+    // Update count
+    if (alertsCount) {
+        alertsCount.textContent = `Showing ${totalAlerts} alert${totalAlerts !== 1 ? 's' : ''}`;
+    }
+    
+    // Update pagination info
+    if (paginationInfo) {
+        paginationInfo.textContent = totalAlerts > 0 
+            ? `Showing ${startIndex + 1}-${endIndex} of ${totalAlerts}`
+            : 'Showing 0-0 of 0';
+    }
+    
+    // Update pagination buttons
+    if (prevPage) prevPage.disabled = currentPage === 1;
+    if (nextPage) nextPage.disabled = currentPage >= totalPages;
+    
+    // Render alerts or empty state
+    if (paginatedAlerts.length === 0) {
+        alertsGrid.innerHTML = '';
+        if (alertsEmpty) alertsEmpty.style.display = 'block';
+    } else {
+        if (alertsEmpty) alertsEmpty.style.display = 'none';
+        alertsGrid.innerHTML = paginatedAlerts.map(alert => createAlertCard(alert)).join('');
+    }
+}
+
+// Create alert card HTML
+function createAlertCard(alert) {
+    const timeAgo = getTimeAgo(alert.created_at);
+    const severityIcon = getSeverityIcon(alert.severity);
+    const isResolved = alert.status === 'resolved';
+    
+    return `
+        <div class="alert-card" data-alert-id="${alert.id}">
+            <div class="alert-icon-wrapper ${alert.severity}">
+                <i class="${severityIcon}"></i>
+            </div>
+            <div class="alert-content">
+                <div class="alert-header">
+                    <h4 class="alert-title">${escapeHtml(alert.title)}</h4>
+                    <span class="alert-badge ${alert.severity}">
+                        <i class="fas fa-circle"></i>
+                        ${alert.severity}
+                    </span>
+                    ${isResolved ? '<span class="alert-badge resolved"><i class="fas fa-check"></i>Resolved</span>' : ''}
                 </div>
-                <div class="alert-info">
-                    <div class="patient-name">${alert.patient_name || 'Unknown'}</div>
-                    <div class="alert-type">${alert.alert_type}</div>
-                    <span class="severity-badge ${alert.severity}">${alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)}</span>
+                <p class="alert-description">${escapeHtml(alert.description)}</p>
+                <div class="alert-meta">
+                    <span class="alert-category">
+                        <i class="${getCategoryIcon(alert.category)}"></i>
+                        ${capitalizeFirst(alert.category)}
+                    </span>
+                    <span class="alert-meta-item">
+                        <i class="fas fa-clock"></i>
+                        ${timeAgo}
+                    </span>
+                    <span class="alert-meta-item">
+                        <i class="fas fa-location-dot"></i>
+                        ${escapeHtml(alert.source || 'System')}
+                    </span>
                 </div>
             </div>
-        </td>
-        <td>
-            <div class="timestamp">${dateStr}</div>
-            <div class="time">${timeStr}</div>
-        </td>
-        <td>
-            <div class="values">${alert.values}</div>
-            <div class="normal-range">${alert.normal_range}</div>
-        </td>
-        <td>
-            <span class="status-badge ${statusClass}">${alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}</span>
-        </td>
-        <td>
-            <div class="action-buttons">
-                ${alert.status === 'active' ? '<button class="action-btn resolve" title="Mark Resolved"><i class="fas fa-check"></i></button>' : ''}
-                <button class="action-btn details" title="View Details"><i class="fas fa-eye"></i></button>
+            <div class="alert-actions">
+                ${!isResolved ? `
+                    <button class="btn-resolve" onclick="markAsResolved(${alert.id})">
+                        <i class="fas fa-check"></i>
+                        Resolve
+                    </button>
+                ` : `
+                    <button class="btn-resolve resolved" disabled>
+                        <i class="fas fa-check-double"></i>
+                        Resolved
+                    </button>
+                `}
+                <button class="btn-view" onclick="viewAlertDetails(${alert.id})" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-delete-alert" onclick="deleteAlert(${alert.id})" title="Delete Alert">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
-        </td>
+        </div>
     `;
+}
 
-    return row;
+// Get severity icon
+function getSeverityIcon(severity) {
+    const icons = {
+        critical: 'fas fa-exclamation-triangle',
+        warning: 'fas fa-exclamation-circle',
+        info: 'fas fa-info-circle'
+    };
+    return icons[severity] || icons.info;
+}
+
+// Get category icon
+function getCategoryIcon(category) {
+    const icons = {
+        system: 'fas fa-server',
+        security: 'fas fa-shield-alt',
+        device: 'fas fa-microchip',
+        patient: 'fas fa-user-injured'
+    };
+    return icons[category] || 'fas fa-tag';
+}
+
+// Get time ago string
+function getTimeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Update stats
+function updateStats() {
+    const totalCount = document.getElementById('totalAlertsCount');
+    const criticalCount = document.getElementById('criticalAlertsCount');
+    const warningCount = document.getElementById('warningAlertsCount');
+    const infoCount = document.getElementById('infoAlertsCount');
+    
+    const activeAlerts = alertsData.filter(a => a.status === 'active');
+    
+    if (totalCount) totalCount.textContent = alertsData.length;
+    if (criticalCount) criticalCount.textContent = activeAlerts.filter(a => a.severity === 'critical').length;
+    if (warningCount) warningCount.textContent = activeAlerts.filter(a => a.severity === 'warning').length;
+    if (infoCount) infoCount.textContent = activeAlerts.filter(a => a.severity === 'info').length;
 }
 
 // Mark alert as resolved
-async function markAlertResolved(alertId) {
+async function markAsResolved(alertId) {
     const alert = alertsData.find(a => a.id === alertId);
-    if (alert) {
-        try {
-            const response = await fetch(`${API_BASE}/alerts/${alertId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    alert_type: alert.alert_type,
-                    severity: alert.severity,
-                    values: alert.values,
-                    normal_range: alert.normal_range,
-                    status: 'resolved',
-                    icon_class: alert.icon_class
-                })
-            });
-
-            if (response.ok) {
-                alert.status = 'resolved';
-                renderAlerts();
-            }
-        } catch (error) {
-            console.error('Error marking alert as resolved:', error);
+    if (!alert) return;
+    
+    try {
+        // Try API call first
+        const response = await fetch(`${API_BASE}/alerts/${alertId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...alert, status: 'resolved' })
+        });
+        
+        if (response.ok) {
             alert.status = 'resolved';
-            renderAlerts();
+        } else {
+            // Fallback to local update
+            alert.status = 'resolved';
         }
+    } catch (error) {
+        console.error('Error resolving alert:', error);
+        // Fallback to local update
+        alert.status = 'resolved';
     }
+    
+    applyFilters();
 }
 
 // View alert details
 function viewAlertDetails(alertId) {
     const alert = alertsData.find(a => a.id === alertId);
-    if (alert) {
-        alert('Alert Details:\n\nPatient: ' + (alert.patient_name || 'Unknown') + '\nAlert Type: ' + alert.alert_type + 
-              '\nSeverity: ' + alert.severity.toUpperCase() + '\nTimestamp: ' + new Date(alert.created_at).toLocaleString() + 
-              '\nCurrent Values: ' + alert.values + '\nNormal Range: ' + alert.normal_range + 
-              '\nStatus: ' + alert.status.toUpperCase());
+    if (!alert) return;
+    
+    selectedAlertId = alertId;
+    const modal = document.getElementById('alertDetailModal');
+    const content = document.getElementById('alertDetailContent');
+    const resolveBtn = document.getElementById('modalResolveBtn');
+    
+    if (!modal || !content) return;
+    
+    const isResolved = alert.status === 'resolved';
+    const timestamp = new Date(alert.created_at);
+    
+    content.innerHTML = `
+        <div class="alert-detail-header">
+            <div class="alert-detail-icon ${alert.severity}">
+                <i class="${getSeverityIcon(alert.severity)}"></i>
+            </div>
+            <div class="alert-detail-info">
+                <h4>${escapeHtml(alert.title)}</h4>
+                <div class="alert-detail-badges">
+                    <span class="alert-badge ${alert.severity}">${alert.severity}</span>
+                    <span class="alert-badge ${isResolved ? 'resolved' : 'warning'}">${alert.status}</span>
+                </div>
+            </div>
+        </div>
+        <div class="alert-detail-body">
+            <div class="alert-detail-row">
+                <span class="alert-detail-label">Description</span>
+                <span class="alert-detail-value">${escapeHtml(alert.description)}</span>
+            </div>
+            <div class="alert-detail-row">
+                <span class="alert-detail-label">Category</span>
+                <span class="alert-detail-value">${capitalizeFirst(alert.category)}</span>
+            </div>
+            <div class="alert-detail-row">
+                <span class="alert-detail-label">Source</span>
+                <span class="alert-detail-value">${escapeHtml(alert.source || 'System')}</span>
+            </div>
+            <div class="alert-detail-row">
+                <span class="alert-detail-label">Timestamp</span>
+                <span class="alert-detail-value">${timestamp.toLocaleString()}</span>
+            </div>
+        </div>
+    `;
+    
+    // Update resolve button
+    if (resolveBtn) {
+        if (isResolved) {
+            resolveBtn.innerHTML = '<i class="fas fa-check-double"></i> Already Resolved';
+            resolveBtn.disabled = true;
+            resolveBtn.style.background = '#e5e7eb';
+            resolveBtn.style.color = '#6b7280';
+        } else {
+            resolveBtn.innerHTML = '<i class="fas fa-check"></i> Mark as Resolved';
+            resolveBtn.disabled = false;
+            resolveBtn.style.background = '#22c55e';
+            resolveBtn.style.color = 'white';
+        }
+    }
+    
+    modal.classList.add('active');
+}
+
+// Close alert modal
+function closeAlertModal() {
+    const modal = document.getElementById('alertDetailModal');
+    if (modal) {
+        modal.classList.remove('active');
+        selectedAlertId = null;
     }
 }
 
-// Update alert counts on stat cards
-function updateAlertCounts() {
-    const activeCount = alertsData.filter(a => a.status === 'active').length;
-    const criticalCount = alertsData.filter(a => a.severity === 'critical' && a.status === 'active').length;
-    const resolvedCount = alertsData.filter(a => a.status === 'resolved').length;
-    const mediumCount = alertsData.filter(a => a.severity === 'medium' && a.status === 'active').length;
-
-    const statCards = document.querySelectorAll('.alert-stat-card');
-    if (statCards.length >= 4) {
-        statCards[0].querySelector('.stat-number').textContent = activeCount;
-        statCards[1].querySelector('.stat-number').textContent = criticalCount;
-        statCards[2].querySelector('.stat-number').textContent = resolvedCount;
-        statCards[3].querySelector('.stat-number').textContent = mediumCount;
+// Resolve from modal
+function resolveFromModal() {
+    if (selectedAlertId) {
+        markAsResolved(selectedAlertId);
+        closeAlertModal();
     }
+}
+
+// Delete alert
+async function deleteAlert(alertId) {
+    if (!confirm('Are you sure you want to delete this alert?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/alerts/${alertId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            alertsData = alertsData.filter(a => a.id !== alertId);
+        } else {
+            // Fallback to local delete
+            alertsData = alertsData.filter(a => a.id !== alertId);
+        }
+    } catch (error) {
+        console.error('Error deleting alert:', error);
+        // Fallback to local delete
+        alertsData = alertsData.filter(a => a.id !== alertId);
+    }
+    
+    applyFilters();
+}
+
+// Helper functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+function capitalizeFirst(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // Logout functionality
@@ -245,7 +485,6 @@ function handleLogout() {
     showLogoutModal();
 }
 
-// Show logout confirmation modal
 function showLogoutModal() {
     const modal = document.getElementById('logoutModal');
     if (modal) {
@@ -254,7 +493,6 @@ function showLogoutModal() {
     }
 }
 
-// Close logout modal
 function closeLogoutModal() {
     const modal = document.getElementById('logoutModal');
     if (modal) {
@@ -263,7 +501,6 @@ function closeLogoutModal() {
     }
 }
 
-// Confirm logout
 function confirmLogout() {
     localStorage.clear();
     sessionStorage.clear();

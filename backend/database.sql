@@ -42,16 +42,32 @@ CREATE TABLE IF NOT EXISTS devices (
 
 CREATE TABLE IF NOT EXISTS alerts (
     id SERIAL PRIMARY KEY,
-    patient_id INTEGER NOT NULL REFERENCES patients(id),
-    alert_type VARCHAR(100) NOT NULL,
-    severity VARCHAR(50) CHECK (severity IN ('critical', 'medium', 'low')) DEFAULT 'medium',
+    patient_id INTEGER REFERENCES patients(id) ON DELETE SET NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    alert_type VARCHAR(100),
+    category VARCHAR(50) CHECK (category IN ('system', 'security', 'device', 'patient')) DEFAULT 'system',
+    severity VARCHAR(50) CHECK (severity IN ('critical', 'warning', 'info')) DEFAULT 'info',
     values TEXT,
     normal_range TEXT,
     status VARCHAR(50) CHECK (status IN ('active', 'resolved')) DEFAULT 'active',
+    source VARCHAR(100) DEFAULT 'System',
     icon_class VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Insert sample alerts
+INSERT INTO alerts (title, description, category, severity, status, source) VALUES
+    ('High CPU Usage Detected', 'Server CPU usage exceeded 90% for more than 5 minutes.', 'system', 'critical', 'active', 'System Monitor'),
+    ('Failed Login Attempts', 'Multiple failed login attempts detected from IP 192.168.1.105.', 'security', 'warning', 'active', 'Security Module'),
+    ('Device Offline', 'Patient monitor device PM-2045 has been offline for 30 minutes.', 'device', 'critical', 'active', 'Device Manager'),
+    ('Database Backup Completed', 'Daily automated database backup completed successfully.', 'system', 'info', 'resolved', 'Backup Service'),
+    ('New Patient Registration', '5 new patients have been registered in the system today.', 'patient', 'info', 'resolved', 'Registration Module'),
+    ('Low Disk Space Warning', 'Server disk space is below 15%. Consider archiving old records.', 'system', 'warning', 'active', 'System Monitor'),
+    ('SSL Certificate Expiring', 'SSL certificate will expire in 14 days.', 'security', 'warning', 'active', 'Security Module'),
+    ('System Update Available', 'A new system update (v2.4.1) is available for installation.', 'system', 'info', 'active', 'Update Service')
+ON CONFLICT DO NOTHING;
 
 -- Departments table (referenced by employees)
 CREATE TABLE IF NOT EXISTS departments (
@@ -208,3 +224,59 @@ CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id);
 CREATE INDEX IF NOT EXISTS idx_employees_job_title ON employees(job_title);
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(employment_status);
 CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);
+
+-- ===== REPORTS TABLES =====
+-- System activity log for tracking all system events
+CREATE TABLE IF NOT EXISTS system_activity (
+    id SERIAL PRIMARY KEY,
+    activity_type VARCHAR(100) NOT NULL,
+    description TEXT,
+    user_name VARCHAR(255),
+    user_role VARCHAR(100),
+    department VARCHAR(100),
+    entity_type VARCHAR(50),
+    entity_id INTEGER,
+    ip_address VARCHAR(45),
+    status VARCHAR(50) CHECK (status IN ('success', 'failed', 'pending')) DEFAULT 'success',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Report snapshots for storing periodic statistics
+CREATE TABLE IF NOT EXISTS report_snapshots (
+    id SERIAL PRIMARY KEY,
+    snapshot_date DATE NOT NULL,
+    total_patients INTEGER DEFAULT 0,
+    active_patients INTEGER DEFAULT 0,
+    total_employees INTEGER DEFAULT 0,
+    active_employees INTEGER DEFAULT 0,
+    total_departments INTEGER DEFAULT 0,
+    active_departments INTEGER DEFAULT 0,
+    total_devices INTEGER DEFAULT 0,
+    online_devices INTEGER DEFAULT 0,
+    total_alerts INTEGER DEFAULT 0,
+    critical_alerts INTEGER DEFAULT 0,
+    resolved_alerts INTEGER DEFAULT 0,
+    system_uptime DECIMAL(5,2) DEFAULT 99.9,
+    avg_response_time INTEGER DEFAULT 150,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(snapshot_date)
+);
+
+-- Department statistics for performance tracking
+CREATE TABLE IF NOT EXISTS department_stats (
+    id SERIAL PRIMARY KEY,
+    department_id INTEGER REFERENCES departments(department_id) ON DELETE CASCADE,
+    stat_date DATE NOT NULL,
+    patient_count INTEGER DEFAULT 0,
+    employee_count INTEGER DEFAULT 0,
+    alert_count INTEGER DEFAULT 0,
+    activity_score DECIMAL(5,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(department_id, stat_date)
+);
+
+-- Indexes for reports tables
+CREATE INDEX IF NOT EXISTS idx_system_activity_created ON system_activity(created_at);
+CREATE INDEX IF NOT EXISTS idx_system_activity_type ON system_activity(activity_type);
+CREATE INDEX IF NOT EXISTS idx_report_snapshots_date ON report_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_department_stats_date ON department_stats(stat_date);

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics & Reports - PatientPulse</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/reports.css">
+    <link href="https://fonts.googleapis.com/css?family=Inter:400,500,600,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <%- include('partials/sidebar', { activePage: 'reports' }) %>
+
+    <div class="main">
+        <div class="page-header">
+            <div>
+                <h1>Analytics & Reports</h1>
+                <div class="page-subtitle">View system analytics, generate reports, and track performance</div>
+            </div>
+        </div>
+
+        <!-- Reports Header with Date Filter and Export -->
+        <div class="reports-header">
+            <div class="date-range-filter">
+                <label for="startDate">From:</label>
+                <input type="date" id="startDate" class="date-input">
+                <label for="endDate">To:</label>
+                <input type="date" id="endDate" class="date-input">
+                <button class="btn-export csv" id="applyDateFilter">
+                    <i class="fas fa-filter"></i>
+                    Apply
+                </button>
+            </div>
+            <div class="reports-actions">
+                <button class="btn-export csv" onclick="exportCSV()">
+                    <i class="fas fa-file-csv"></i>
+                    Export CSV
+                </button>
+                <button class="btn-export pdf" onclick="exportPDF()">
+                    <i class="fas fa-file-pdf"></i>
+                    Export PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card patients">
+                <div class="summary-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="summary-content">
+                    <div class="summary-number" id="totalPatients">0</div>
+                    <div class="summary-label">Total Patients</div>
+                    <span class="summary-change positive" id="patientChange">
+                        <i class="fas fa-arrow-up"></i>
+                        +12% this month
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-card employees">
+                <div class="summary-icon">
+                    <i class="fas fa-user-md"></i>
+                </div>
+                <div class="summary-content">
+                    <div class="summary-number" id="totalEmployees">0</div>
+                    <div class="summary-label">Active Employees</div>
+                    <span class="summary-change positive" id="employeeChange">
+                        <i class="fas fa-arrow-up"></i>
+                        +5% this month
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-card departments">
+                <div class="summary-icon">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div class="summary-content">
+                    <div class="summary-number" id="totalDepartments">0</div>
+                    <div class="summary-label">Active Departments</div>
+                    <span class="summary-change positive" id="deptChange">
+                        <i class="fas fa-check"></i>
+                        All Active
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-card activity">
+                <div class="summary-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="summary-content">
+                    <div class="summary-number" id="activityScore">92</div>
+                    <div class="summary-label">System Activity Score</div>
+                    <span class="summary-change positive" id="activityChange">
+                        <i class="fas fa-arrow-up"></i>
+                        +8% from last week
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <!-- Monthly Activity Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3>Monthly Activity Trends</h3>
+                    <div class="chart-options">
+                        <button class="chart-option-btn active" data-period="6months">6 Months</button>
+                        <button class="chart-option-btn" data-period="12months">12 Months</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Department Performance Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3>Department Performance</h3>
+                    <div class="chart-options">
+                        <button class="chart-option-btn active" data-type="bar">Bar</button>
+                        <button class="chart-option-btn" data-type="pie">Pie</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="departmentChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity Table -->
+        <div class="data-table-section">
+            <div class="table-header">
+                <h3>Recent System Activity</h3>
+                <div class="table-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="activitySearch" placeholder="Search activity...">
+                </div>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Activity</th>
+                        <th>User</th>
+                        <th>Department</th>
+                        <th>Timestamp</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="activityTableBody">
+                    <!-- Activity rows will be dynamically inserted -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+            <div class="quick-stat-card">
+                <h4>Resource Utilization</h4>
+                <div class="stat-item">
+                    <span class="stat-item-label">Server Capacity</span>
+                    <span class="stat-item-value">78%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill blue" style="width: 78%"></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">Database Usage</span>
+                    <span class="stat-item-value">45%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill green" style="width: 45%"></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">Active Sessions</span>
+                    <span class="stat-item-value">156</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill purple" style="width: 62%"></div>
+                </div>
+            </div>
+
+            <div class="quick-stat-card">
+                <h4>System Health</h4>
+                <div class="stat-item">
+                    <span class="stat-item-label">Uptime</span>
+                    <span class="stat-item-value">99.9%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">Response Time</span>
+                    <span class="stat-item-value">145ms</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">Error Rate</span>
+                    <span class="stat-item-value">0.02%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">Last Backup</span>
+                    <span class="stat-item-value">2 hours ago</span>
+                </div>
+            </div>
+
+            <div class="quick-stat-card">
+                <h4>Department Overview</h4>
+                <div class="stat-item">
+                    <span class="stat-item-label">Emergency</span>
+                    <span class="stat-item-value">24 patients</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill orange" style="width: 85%"></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">ICU</span>
+                    <span class="stat-item-value">12 patients</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill blue" style="width: 60%"></div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-item-label">General Ward</span>
+                    <span class="stat-item-value">45 patients</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill green" style="width: 45%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    <div id="logoutModal" class="modal">
+        <div class="modal-content confirm-modal">
+            <div class="modal-header">
+                <h2>Confirm Logout</h2>
+                <button class="modal-close" onclick="closeLogoutModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="status-icon warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+                <p>Are you sure you want to logout?</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                <button type="button" class="btn-delete" onclick="confirmLogout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal.show { display: flex; }
+        .confirm-modal { background: white; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative; z-index: 1001; }
+        .confirm-modal .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #eee; }
+        .confirm-modal .modal-header h2 { margin: 0; font-size: 18px; color: #333; }
+        .confirm-modal .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #666; }
+        .confirm-modal .modal-close:hover { color: #333; }
+        .modal-body { padding: 30px; text-align: center; }
+        .modal-body p { color: #666; margin: 0; }
+        .status-icon { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; }
+        .status-icon.warning { background: #fef3c7; color: #f59e0b; }
+        .form-actions { display: flex; gap: 12px; padding: 20px; border-top: 1px solid #eee; justify-content: flex-end; }
+        .btn-cancel { padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer; font-size: 14px; position: relative; z-index: 1002; }
+        .btn-cancel:hover { background: #f5f5f5; }
+        .btn-delete { padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; position: relative; z-index: 1002; }
+        .btn-delete:hover { background: #dc2626; }
+    </style>
+
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/reports.js"></script>
+</body>
+</html>
