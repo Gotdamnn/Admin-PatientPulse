@@ -12,78 +12,141 @@
     <%- include('partials/sidebar', { activePage: 'dashboard' }) %>
 
     <div class="main">
+        <!-- Top Navbar with Global Search -->
+        <div class="top-navbar">
+            <div class="search-container">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="globalSearch" class="global-search" placeholder="Search patients, employees, departments, reports...">
+                <div id="searchResults" class="search-results"></div>
+            </div>
+            <div class="navbar-actions">
+                <div class="notification" onclick="window.location.href='/alerts'">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="alertBadge">0</span>
+                </div>
+                <div class="admin-profile">
+                    <div class="admin-avatar">AD</div>
+                    <div class="admin-info">
+                        <span class="admin-name">Admin User</span>
+                        <span class="admin-role">Administrator</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="dashboard-header">
             <div>
                 <h1>Dashboard Overview</h1>
-                <div class="last-updated">Last updated: 8:56:29 PM</div>
+                <div class="last-updated">Last updated: <span id="lastUpdateTime">--</span></div>
             </div>
             <div class="refresh">
-                <button>🔄 Refresh</button>
-                <div class="notification">
-                    <i class="fas fa-bell"></i>
-                    <span class="badge">3</span>
-                </div>
+                <button id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
             </div>
         </div>
 
+        <!-- Summary Cards - Top Row -->
         <div class="stats-cards">
             <div class="stats-card patients">
-                <div class="icon">👤</div>
-                <div class="stat-title">Total Patients</div>
-                <div class="stat-value" id="totalPatients">--</div>
-                <div class="stat-desc">Registered in database</div>
-                <div class="stat-change" id="activePatients">0 active</div>
+                <div class="card-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="card-content">
+                    <div class="stat-title">Total Patients</div>
+                    <div class="stat-value" id="totalPatients">--</div>
+                    <div class="stat-desc"><span id="activePatients">0</span> active patients</div>
+                </div>
             </div>
-            <div class="stats-card devices">
-                <div class="icon">💻</div>
-                <div class="stat-title">Connected Devices</div>
-                <div class="stat-value" id="onlineDevices">--</div>
-                <div class="stat-desc">Online and monitoring</div>
-                <div class="stat-change" id="totalDevices">0 total</div>
+            <div class="stats-card employees">
+                <div class="card-icon">
+                    <i class="fas fa-user-md"></i>
+                </div>
+                <div class="card-content">
+                    <div class="stat-title">Total Employees</div>
+                    <div class="stat-value" id="totalEmployees">--</div>
+                    <div class="stat-desc"><span id="activeEmployees">0</span> active employees</div>
+                </div>
             </div>
-            <div class="stats-card alerts">
-                <div class="icon">⚠️</div>
-                <div class="stat-title">Offline Devices</div>
-                <div class="stat-value" id="offlineDevices">--</div>
-                <div class="stat-desc">Requires attention</div>
-                <div class="stat-change" id="warningDevices">0 warning</div>
+            <div class="stats-card departments">
+                <div class="card-icon">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div class="card-content">
+                    <div class="stat-title">Total Departments</div>
+                    <div class="stat-value" id="totalDepartments">--</div>
+                    <div class="stat-desc"><span id="activeDepartments">0</span> active departments</div>
+                </div>
             </div>
-            <div class="stats-card uptime">
-                <div class="icon">⚡</div>
-                <div class="stat-title">System Status</div>
-                <div class="stat-value" id="systemStatus">Online</div>
-                <div class="stat-desc">Server running</div>
-                <div class="stat-change" id="lastUpdated">Just now</div>
+            <div class="stats-card devices-overview">
+                <div class="card-icon">
+                    <i class="fas fa-laptop-medical"></i>
+                </div>
+                <div class="card-content">
+                    <div class="stat-title">Devices Overview</div>
+                    <div class="stat-value" id="totalDevices">--</div>
+                    <div class="devices-status">
+                        <div class="device-status online">
+                            <span class="status-dot online-dot"></span>
+                            <span>Online: <strong id="onlineDevices">0</strong></span>
+                        </div>
+                        <div class="device-status offline">
+                            <span class="status-dot offline-dot"></span>
+                            <span>Offline: <strong id="offlineDevices">0</strong></span>
+                        </div>
+                    </div>
+                    <div class="stat-desc">Last sync: <span id="lastSyncTime">--</span></div>
+                </div>
             </div>
         </div>
 
+        <!-- Quick Actions & Recent Activity Row -->
         <div class="actions-activity-container">
+            <!-- Quick Actions Section -->
             <div class="quick-actions">
                 <div class="quick-actions-header">
-                    <h2>Quick Actions</h2>
+                    <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
                 </div>
-                <div class="quick-actions-list">
-                    <a href="/patients" class="quick-action" style="text-decoration: none; color: inherit;">
-                        <div class="icon">👤</div>
-                        <div class="action-title">Manage Patients</div>
-                        <div class="action-desc">View and manage patient records</div>
+                <div class="quick-actions-grid">
+                    <a href="/patients?action=add" class="quick-action-btn">
+                        <div class="action-icon patients-icon">
+                            <i class="fas fa-user-plus"></i>
+                        </div>
+                        <span>Add Patient</span>
                     </a>
-                    <a href="/devices" class="quick-action" style="text-decoration: none; color: inherit;">
-                        <div class="icon">💻</div>
-                        <div class="action-title">Device Status</div>
-                        <div class="action-desc">Monitor connected devices</div>
+                    <a href="/employees?action=add" class="quick-action-btn">
+                        <div class="action-icon employees-icon">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <span>Add Employee</span>
                     </a>
-                    <a href="/alerts" class="quick-action" style="text-decoration: none; color: inherit;">
-                        <div class="icon">⚠️</div>
-                        <div class="action-title">View Alerts</div>
-                        <div class="action-desc">Check system alerts</div>
+                    <a href="/departments?action=add" class="quick-action-btn">
+                        <div class="action-icon departments-icon">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <span>Add Department</span>
+                    </a>
+                    <a href="/devices?action=add" class="quick-action-btn">
+                        <div class="action-icon devices-icon">
+                            <i class="fas fa-laptop-medical"></i>
+                        </div>
+                        <span>Register Device</span>
+                    </a>
+                    <a href="/reports?action=generate" class="quick-action-btn">
+                        <div class="action-icon reports-icon">
+                            <i class="fas fa-file-medical-alt"></i>
+                        </div>
+                        <span>Generate Report</span>
                     </a>
                 </div>
             </div>
 
+            <!-- Recent Activity Section -->
             <div class="recent-activity">
                 <div class="recent-activity-header">
-                    <h2>Recent Activity</h2>
+                    <h2><i class="fas fa-history"></i> Recent Activity</h2>
+                    <div class="auto-refresh-indicator">
+                        <span class="pulse-dot"></span>
+                        <span>Auto-refresh</span>
+                    </div>
                 </div>
                 <ul class="activity-list" id="activityList">
                     <li class="loading-activity">
@@ -94,6 +157,26 @@
                         </div>
                     </li>
                 </ul>
+            </div>
+        </div>
+
+        <!-- System Status Bar -->
+        <div class="system-status-bar">
+            <div class="status-item">
+                <i class="fas fa-server"></i>
+                <span>Server: <strong id="serverStatus">Online</strong></span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-database"></i>
+                <span>Database: <strong id="dbStatus">Connected</strong></span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-clock"></i>
+                <span>Uptime: <strong id="uptime">--</strong></span>
+            </div>
+            <div class="status-item">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Critical Alerts: <strong id="criticalAlerts">0</strong></span>
             </div>
         </div>
     </div>
@@ -119,24 +202,5 @@
             </div>
         </div>
     </div>
-
-    <style>
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: white; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative; z-index: 1001; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #eee; }
-        .modal-header h2 { margin: 0; font-size: 18px; color: #333; }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #666; }
-        .modal-close:hover { color: #333; }
-        .modal-body { padding: 30px; text-align: center; }
-        .modal-body p { color: #666; margin: 0; }
-        .status-icon { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; }
-        .status-icon.warning { background: #fef3c7; color: #f59e0b; }
-        .form-actions { display: flex; gap: 12px; padding: 20px; border-top: 1px solid #eee; justify-content: flex-end; }
-        .btn-cancel { padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        .btn-cancel:hover { background: #f5f5f5; }
-        .btn-delete { padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        .btn-delete:hover { background: #dc2626; }
-    </style>
 </body>
 </html>

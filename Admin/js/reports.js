@@ -1,6 +1,8 @@
 // Reports & Analytics Page Script
 
-const API_BASE = 'http://localhost:3001/api';
+if (typeof API_BASE === 'undefined') {
+    var API_BASE = 'http://localhost:3001/api';
+}
 let activityChart = null;
 let departmentChart = null;
 let activityData = [];

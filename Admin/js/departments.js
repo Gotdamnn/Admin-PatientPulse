@@ -1,5 +1,7 @@
 // Department Management JavaScript - Enhanced Version
-const API_BASE = 'http://localhost:3001/api';
+if (typeof API_BASE === 'undefined') {
+    var API_BASE = 'http://localhost:3001/api';
+}
 
 let departments = [];
 let employees = [];

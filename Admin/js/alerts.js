@@ -1,6 +1,8 @@
 // Alert Management Page Script - Enhanced
 
-const API_BASE = 'http://localhost:3001/api';
+if (typeof API_BASE === 'undefined') {
+    var API_BASE = 'http://localhost:3001/api';
+}
 let alertsData = [];
 let filteredAlerts = [];
 let currentSeverityFilter = 'all';

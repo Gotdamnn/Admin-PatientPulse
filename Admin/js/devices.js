@@ -1,7 +1,9 @@
 // devices.js
 // Handles device monitoring page interactions with database API
 
-const API_BASE = 'http://localhost:3001/api';
+if (typeof API_BASE === 'undefined') {
+    var API_BASE = 'http://localhost:3001/api';
+}
 let currentEditingDeviceId = null;
 let allDevices = [];
 

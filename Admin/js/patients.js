@@ -1,6 +1,8 @@
 // Patient Management Page Script with API Integration
 
-const API_BASE = 'http://localhost:3001/api';
+if (typeof API_BASE === 'undefined') {
+    var API_BASE = 'http://localhost:3001/api';
+}
 let allPatients = [];
 let pendingDeletePatientId = null;
 

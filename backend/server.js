@@ -647,6 +647,153 @@ app.get('/api/reports/summary', async (req, res) => {
     }
 });
 
+// ===== DASHBOARD API =====
+// Get dashboard summary (optimized single endpoint)
+app.get('/api/dashboard/summary', async (req, res) => {
+    try {
+        const [patients, employees, departments, devices, alerts] = await Promise.all([
+            pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM patients"),
+            pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE employment_status = 'Active') as active FROM employees"),
+            pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'Active') as active FROM departments"),
+            pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'online') as online FROM devices"),
+            pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE severity = 'critical' AND status = 'active') as critical FROM alerts")
+        ]);
+        
+        res.json({
+            patients: patients.rows[0],
+            employees: employees.rows[0],
+            departments: departments.rows[0],
+            devices: devices.rows[0],
+            alerts: alerts.rows[0]
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get recent activity for dashboard
+app.get('/api/dashboard/activity', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const activities = [];
+        
+        // Get recent patients
+        const patients = await pool.query(
+            `SELECT id, name, status, created_at, updated_at FROM patients 
+             ORDER BY GREATEST(created_at, updated_at) DESC LIMIT 5`
+        );
+        patients.rows.forEach(p => {
+            activities.push({
+                type: 'patient',
+                title: 'Patient registered',
+                description: `${p.name} - ID: PT-${p.id}`,
+                user: 'System',
+                timestamp: p.updated_at || p.created_at
+            });
+        });
+        
+        // Get recent employees
+        const employees = await pool.query(
+            `SELECT employee_id, first_name, last_name, job_title, created_at, updated_at FROM employees 
+             ORDER BY GREATEST(created_at, updated_at) DESC LIMIT 5`
+        );
+        employees.rows.forEach(e => {
+            activities.push({
+                type: 'employee',
+                title: 'Employee added',
+                description: `${e.first_name} ${e.last_name} - ${e.job_title || 'Staff'}`,
+                user: 'HR Admin',
+                timestamp: e.updated_at || e.created_at
+            });
+        });
+        
+        // Get recent device updates
+        const devices = await pool.query(
+            `SELECT id, name, device_id, status, location, last_data_time, created_at FROM devices 
+             ORDER BY GREATEST(last_data_time, created_at) DESC LIMIT 5`
+        );
+        devices.rows.forEach(d => {
+            const statusText = d.status === 'online' ? 'connected' : d.status === 'offline' ? 'went offline' : 'warning';
+            activities.push({
+                type: 'device',
+                title: `Device ${statusText}`,
+                description: `${d.name} at ${d.location || 'Unknown location'}`,
+                user: 'Device Manager',
+                timestamp: d.last_data_time || d.created_at
+            });
+        });
+        
+        // Get recent alerts
+        const alerts = await pool.query(
+            `SELECT id, title, severity, category, created_at FROM alerts 
+             WHERE status = 'active' ORDER BY created_at DESC LIMIT 5`
+        );
+        alerts.rows.forEach(a => {
+            activities.push({
+                type: 'alert',
+                title: `${a.severity.charAt(0).toUpperCase() + a.severity.slice(1)} Alert`,
+                description: a.title,
+                user: 'System',
+                timestamp: a.created_at
+            });
+        });
+        
+        // Sort by timestamp and limit
+        activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        res.json(activities.slice(0, limit));
+        
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===== GLOBAL SEARCH API =====
+app.get('/api/search', async (req, res) => {
+    try {
+        const query = req.query.q?.toLowerCase() || '';
+        if (query.length < 2) {
+            return res.json({ patients: [], employees: [], departments: [], reports: [] });
+        }
+        
+        const searchPattern = `%${query}%`;
+        
+        // Search patients
+        const patients = await pool.query(
+            `SELECT id, patient_id, name, status, email FROM patients 
+             WHERE LOWER(name) LIKE $1 OR LOWER(email) LIKE $1 OR CAST(patient_id AS TEXT) LIKE $1
+             LIMIT 10`,
+            [searchPattern]
+        );
+        
+        // Search employees
+        const employees = await pool.query(
+            `SELECT employee_id, first_name, last_name, job_title, email, department_id FROM employees 
+             WHERE LOWER(first_name) LIKE $1 OR LOWER(last_name) LIKE $1 
+             OR LOWER(job_title) LIKE $1 OR LOWER(email) LIKE $1
+             LIMIT 10`,
+            [searchPattern]
+        );
+        
+        // Search departments
+        const departments = await pool.query(
+            `SELECT department_id, department_name, description, status FROM departments 
+             WHERE LOWER(department_name) LIKE $1 OR LOWER(description) LIKE $1
+             LIMIT 10`,
+            [searchPattern]
+        );
+        
+        res.json({
+            patients: patients.rows,
+            employees: employees.rows,
+            departments: departments.rows,
+            reports: [] // Can be extended for report search
+        });
+        
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ===== ALERT GENERATION SYSTEM =====
 
 // Normal range for body temperature
