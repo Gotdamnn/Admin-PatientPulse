@@ -201,6 +201,7 @@ async function runMigrations() {
     console.log('\n🔧 Starting database migrations...\n');
     
     try {
+        await ensureStaffTable();
         await ensureNotificationsTable();
         await fixCreateNotificationFunction();
         
@@ -209,6 +210,49 @@ async function runMigrations() {
     } catch (err) {
         console.error('\n❌ Database migrations failed:', err.message, '\n');
         return false;
+    }
+}
+
+// Ensure staff table exists with mock data
+async function ensureStaffTable() {
+    const client = await pool.connect();
+    try {
+        // Create staff table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS staff (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                role VARCHAR(50) CHECK (role IN ('Super Admin', 'Admin', 'Manager', 'Supervisor', 'Admin Manager')) NOT NULL,
+                department VARCHAR(255),
+                status VARCHAR(50) CHECK (status IN ('Active', 'Inactive', 'Disabled')) DEFAULT 'Active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Insert default staff members
+        await client.query(`
+            INSERT INTO staff (name, email, role, department, status) VALUES
+                ('John Administrator', 'john.admin@hospital.com', 'Super Admin', 'Administration', 'Active'),
+                ('Sarah Manager', 'sarah.manager@hospital.com', 'Admin', 'IT', 'Active'),
+                ('Michael Johnson', 'michael.johnson@hospital.com', 'Manager', 'HR', 'Active'),
+                ('Emily Davis', 'emily.davis@hospital.com', 'Supervisor', 'Nursing', 'Active'),
+                ('Robert Wilson', 'robert.wilson@hospital.com', 'Admin', 'Medical Records', 'Inactive')
+            ON CONFLICT (email) DO NOTHING
+        `);
+        
+        // Verify data was inserted
+        const result = await client.query('SELECT COUNT(*) as count FROM staff');
+        const count = result.rows[0].count;
+        
+        console.log(`✅ Staff table ensured with ${count} staff members`);
+    } catch (err) {
+        if (!err.message.includes('already exists')) {
+            console.error('⚠️  Error ensuring staff table:', err.message);
+        }
+    } finally {
+        client.release();
     }
 }
 

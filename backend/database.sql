@@ -9,9 +9,15 @@ CREATE TABLE IF NOT EXISTS admins (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default admin user
+-- Insert default admin user and staff members
+-- Password hash for all: 'Carlzabala@123' (bcrypt)
 INSERT INTO admins (email, password, name) VALUES
-    ('admin@patientpulse.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Admin User')
+    ('admin@patientpulse.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Admin User'),
+    ('john.admin@hospital.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'John Administrator'),
+    ('sarah.manager@hospital.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Sarah Manager'),
+    ('michael.johnson@hospital.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Michael Johnson'),
+    ('emily.davis@hospital.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Emily Davis'),
+    ('robert.wilson@hospital.com', '$2b$10$4kQDrmf4l7GtEI0fel0XuOjXl4By29DO3KNC75fv3tVjTkjxk03IK', 'Robert Wilson')
 ON CONFLICT (email) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS patients (
@@ -223,7 +229,6 @@ CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
 CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id);
 CREATE INDEX IF NOT EXISTS idx_employees_job_title ON employees(job_title);
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(employment_status);
-CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);
 
 -- ===== REPORTS TABLES =====
 -- System activity log for tracking all system events
@@ -281,30 +286,11 @@ CREATE INDEX IF NOT EXISTS idx_system_activity_type ON system_activity(activity_
 CREATE INDEX IF NOT EXISTS idx_report_snapshots_date ON report_snapshots(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_department_stats_date ON department_stats(stat_date);
 
--- ===== STAFF MANAGEMENT TABLES =====
-CREATE TABLE IF NOT EXISTS staff (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    role VARCHAR(50) CHECK (role IN ('Super Admin', 'Admin', 'Manager', 'Supervisor')) NOT NULL,
-    department VARCHAR(255),
-    status VARCHAR(50) CHECK (status IN ('Active', 'Inactive', 'Disabled')) DEFAULT 'Active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS staff_permissions (
-    id SERIAL PRIMARY KEY,
-    staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE NOT NULL,
-    permission VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- ===== AUDIT LOGS TABLE =====
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    admin_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+    admin_id INTEGER,
     admin_name VARCHAR(255) NOT NULL,
     action VARCHAR(50) CHECK (action IN ('Create', 'Update', 'Delete', 'Login', 'Logout', 'View', 'Export')) NOT NULL,
     table_name VARCHAR(100) NOT NULL,
@@ -315,34 +301,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default staff members
-INSERT INTO staff (name, email, role, department, status) VALUES
-    ('John Administrator', 'john.admin@hospital.com', 'Super Admin', 'Administration', 'Active'),
-    ('Sarah Manager', 'sarah.manager@hospital.com', 'Admin', 'IT', 'Active'),
-    ('Michael Johnson', 'michael.johnson@hospital.com', 'Manager', 'HR', 'Active'),
-    ('Emily Davis', 'emily.davis@hospital.com', 'Supervisor', 'Nursing', 'Active'),
-    ('Robert Wilson', 'robert.wilson@hospital.com', 'Admin', 'Medical Records', 'Inactive')
-ON CONFLICT (email) DO NOTHING;
-
--- Insert default permissions for Super Admin
-INSERT INTO staff_permissions (staff_id, permission)
-SELECT s.id, permission FROM staff s,
-(VALUES 
-    ('view_staff'), ('add_staff'), ('edit_staff'), ('delete_staff'), ('manage_permissions'),
-    ('view_patient'), ('add_patient'), ('edit_patient'), ('delete_patient'),
-    ('view_device'), ('add_device'), ('edit_device'), ('delete_device'),
-    ('view_department'), ('add_department'), ('edit_department'), ('delete_department'),
-    ('view_reports'), ('export_reports'), ('view_analytics'),
-    ('view_settings'), ('edit_settings'), ('view_audit_logs'), ('manage_backup')
-) AS perms(permission)
-WHERE s.email = 'john.admin@hospital.com'
-ON CONFLICT DO NOTHING;
-
--- Create indexes for staff and audit logs
-CREATE INDEX IF NOT EXISTS idx_staff_email ON staff(email);
-CREATE INDEX IF NOT EXISTS idx_staff_role ON staff(role);
-CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
-CREATE INDEX IF NOT EXISTS idx_staff_permissions_staff_id ON staff_permissions(staff_id);
+-- Create indexes for audit logs
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id ON audit_logs(admin_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
@@ -444,9 +403,214 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- Indexes for notifications
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+
+-- ===== STAFF TABLE =====
+CREATE TABLE IF NOT EXISTS staff (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) CHECK (role IN ('Super Admin', 'Admin', 'Manager', 'Supervisor', 'Admin Manager')) NOT NULL,
+    department VARCHAR(255),
+    status VARCHAR(50) CHECK (status IN ('Active', 'Inactive', 'Disabled')) DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default staff members
+INSERT INTO staff (name, email, role, department, status) VALUES
+    ('Admin User', 'admin@patientpulse.com', 'Super Admin', 'Administration', 'Active'),
+    ('John Administrator', 'john.admin@hospital.com', 'Super Admin', 'Administration', 'Active'),
+    ('Sarah Manager', 'sarah.manager@hospital.com', 'Admin', 'IT', 'Active'),
+    ('Michael Johnson', 'michael.johnson@hospital.com', 'Manager', 'HR', 'Active'),
+    ('Emily Davis', 'emily.davis@hospital.com', 'Supervisor', 'Nursing', 'Active'),
+    ('Robert Wilson', 'robert.wilson@hospital.com', 'Admin', 'Medical Records', 'Inactive')
+ON CONFLICT (email) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_staff_email ON staff(email);
+CREATE INDEX IF NOT EXISTS idx_staff_role ON staff(role);
+CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
+
+-- ===== ROLE-BASED ACCESS CONTROL (RBAC) SYSTEM =====
+
+-- Permissions table: Master list of all available permissions
+CREATE TABLE IF NOT EXISTS permissions (
+    permission_id SERIAL PRIMARY KEY,
+    permission_name VARCHAR(100) UNIQUE NOT NULL,
+    permission_key VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    category VARCHAR(50) CHECK (category IN ('Patient', 'Device', 'Department', 'Reports', 'Settings', 'Staff', 'Audit')) DEFAULT 'Staff',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default permissions
+INSERT INTO permissions (permission_name, permission_key, description, category) VALUES
+    -- Patient Management
+    ('View Patients', 'view_patient', 'View patient records and information', 'Patient'),
+    ('Create Patient', 'create_patient', 'Create new patient records', 'Patient'),
+    ('Edit Patient', 'edit_patient', 'Edit existing patient records', 'Patient'),
+    ('Delete Patient', 'delete_patient', 'Delete patient records', 'Patient'),
+    
+    -- Device Management
+    ('View Devices', 'view_device', 'View device information and status', 'Device'),
+    ('Create Device', 'create_device', 'Add new devices to the system', 'Device'),
+    ('Edit Device', 'edit_device', 'Modify device settings and information', 'Device'),
+    ('Delete Device', 'delete_device', 'Remove devices from the system', 'Device'),
+    
+    -- Department Management
+    ('View Departments', 'view_department', 'View department information', 'Department'),
+    ('Create Department', 'create_department', 'Create new departments', 'Department'),
+    ('Edit Department', 'edit_department', 'Modify department information', 'Department'),
+    ('Delete Department', 'delete_department', 'Remove departments', 'Department'),
+    
+    -- Reports & Analytics
+    ('View Reports', 'view_reports', 'Access system reports and data', 'Reports'),
+    ('Export Reports', 'export_reports', 'Export reports to external formats', 'Reports'),
+    ('View Analytics', 'view_analytics', 'View analytics and dashboards', 'Reports'),
+    
+    -- System Settings
+    ('View Settings', 'view_settings', 'Access system settings', 'Settings'),
+    ('Edit Settings', 'edit_settings', 'Modify system settings and configurations', 'Settings'),
+    ('Manage Backup', 'manage_backup', 'Perform system backups and restoration', 'Settings'),
+    
+    -- Staff Management
+    ('Edit Staff Permissions', 'edit_permissions', 'Modify user permissions and roles', 'Staff'),
+    ('Delete Staff', 'delete_staff', 'Remove staff members from system', 'Staff'),
+    
+    -- Audit & Compliance
+    ('View Audit Logs', 'view_audit_logs', 'Access system audit logs and activity history', 'Audit')
+ON CONFLICT (permission_key) DO NOTHING;
+
+-- Roles table: Define system roles
+CREATE TABLE IF NOT EXISTS roles (
+    role_id SERIAL PRIMARY KEY,
+    role_name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    is_locked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default roles
+INSERT INTO roles (role_name, description, is_locked) VALUES
+    ('Super Admin', 'Full system access with God Mode - cannot be edited or deleted', TRUE),
+    ('Admin', 'High-level access to system settings, billing, and staff management', FALSE),
+    ('Manager', 'Mid-level access focused on departmental reporting and staff oversight', FALSE),
+    ('Supervisor', 'Low-level management focused on day-to-day operations and viewing specific data', FALSE)
+ON CONFLICT (role_name) DO NOTHING;
+
+-- Role Permissions junction table
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_permission_id SERIAL PRIMARY KEY,
+    role_id INTEGER NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
+    permission_id INTEGER NOT NULL REFERENCES permissions(permission_id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(role_id, permission_id)
+);
+
+-- Insert default permissions for each role
+-- Super Admin: All permissions
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM roles r, permissions p
+WHERE r.role_name = 'Super Admin'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- Admin: All permissions except super admin exclusives
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM roles r, permissions p
+WHERE r.role_name = 'Admin'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- Manager: Mid-level permissions
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM roles r, permissions p
+WHERE r.role_name = 'Manager'
+AND p.permission_key IN (
+    'view_patient', 'create_patient', 'edit_patient',
+    'view_device',
+    'view_department', 'create_department', 'edit_department',
+    'view_reports', 'export_reports', 'view_analytics',
+    'view_settings', 'view_audit_logs'
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- Supervisor: Low-level permissions
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM roles r, permissions p
+WHERE r.role_name = 'Supervisor'
+AND p.permission_key IN (
+    'view_patient', 'edit_patient',
+    'view_device',
+    'view_reports'
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- Admin Permissions table: Direct permission assignments to users (overrides role permissions)
+CREATE TABLE IF NOT EXISTS admin_permissions (
+    admin_permission_id SERIAL PRIMARY KEY,
+    admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+    permission_id INTEGER NOT NULL REFERENCES permissions(permission_id) ON DELETE CASCADE,
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    granted_by VARCHAR(255),
+    UNIQUE(admin_id, permission_id)
+);
+
+-- Admin Roles junction table: Maps admins to their roles
+CREATE TABLE IF NOT EXISTS admin_roles (
+    admin_role_id SERIAL PRIMARY KEY,
+    admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_by VARCHAR(255),
+    UNIQUE(admin_id, role_id)
+);
+
+-- Assign roles to admins
+INSERT INTO admin_roles (admin_id, role_id, assigned_by)
+SELECT a.id, r.role_id, 'System'
+FROM admins a, roles r
+WHERE (
+    (a.email = 'admin@patientpulse.com' AND r.role_name = 'Super Admin') OR
+    (a.email = 'john.admin@hospital.com' AND r.role_name = 'Super Admin') OR
+    (a.email = 'sarah.manager@hospital.com' AND r.role_name = 'Admin') OR
+    (a.email = 'michael.johnson@hospital.com' AND r.role_name = 'Manager') OR
+    (a.email = 'emily.davis@hospital.com' AND r.role_name = 'Supervisor') OR
+    (a.email = 'robert.wilson@hospital.com' AND r.role_name = 'Admin')
+)
+ON CONFLICT (admin_id, role_id) DO NOTHING;
+
+-- Staff Permissions table: Direct permission assignments to staff members (overrides role permissions)
+CREATE TABLE IF NOT EXISTS staff_permissions (
+    staff_permission_id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    permission_id INTEGER NOT NULL REFERENCES permissions(permission_id) ON DELETE CASCADE,
+    permission_type VARCHAR(20) CHECK (permission_type IN ('grant', 'revoke')) DEFAULT 'grant',
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    granted_by VARCHAR(255),
+    UNIQUE(staff_id, permission_id)
+);
+
+-- Indexes for staff permissions
+CREATE INDEX IF NOT EXISTS idx_staff_permissions_staff_id ON staff_permissions(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_permissions_permission_id ON staff_permissions(permission_id);
+CREATE INDEX IF NOT EXISTS idx_staff_permissions_type ON staff_permissions(permission_type);
+
+-- Indexes for RBAC tables
+CREATE INDEX IF NOT EXISTS idx_permissions_key ON permissions(permission_key);
+CREATE INDEX IF NOT EXISTS idx_permissions_category ON permissions(category);
+CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(role_name);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions(permission_id);
+CREATE INDEX IF NOT EXISTS idx_admin_roles_admin_id ON admin_roles(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_roles_role_id ON admin_roles(role_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_admin_id ON notifications(admin_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
+CREATE INDEX IF NOT EXISTS idx_admin_permissions_admin_id ON admin_permissions(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_permissions_permission_id ON admin_permissions(permission_id);
 
 -- Function to create notifications on table changes
 CREATE OR REPLACE FUNCTION create_notification()
