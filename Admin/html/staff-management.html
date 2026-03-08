@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Management - PatientPulse</title>
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <link rel="stylesheet" href="../css/staff-management.css">
+    <link href="https://fonts.googleapis.com/css?family=Inter:400,500,600,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo">
+            <img src="../images/logo.png" alt="PatientPulse" class="logo-img" style="width: 40px; height: 40px; border-radius: 8px;">
+            PatientPulse
+        </div>
+        <nav>
+            <ul>
+                <li><a href="dashboard.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="patient.html"><i class="fas fa-users"></i> Patients</a></li>
+                <li><a href="devices.html"><i class="fas fa-laptop"></i> Devices</a></li>
+                <li><a href="employees.html"><i class="fas fa-user-tie"></i> Employees</a></li>
+                <li><a href="departments.html"><i class="fas fa-building"></i> Departments</a></li>
+                <li><a href="staff-management.html" class="active"><i class="fas fa-shield-alt"></i> Staff Management</a></li>
+                <li><a href="alerts.html"><i class="fas fa-bell"></i> Alerts</a></li>
+                <li><a href="#"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                <li><a href="audit-logs.html"><i class="fas fa-file-alt"></i> Audit Logs</a></li>
+                <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
+            </ul>
+        </nav>
+        <button class="logout-btn" onclick="showLogoutModal()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        <div class="user">
+            <div class="user-avatar">AD</div>
+            <div class="user-info">
+                <div class="user-name">Admin User</div>
+                <div class="user-email">admin@patientpulse.com</div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main">
+        <div class="page-header">
+            <div>
+                <h1>Staff Management</h1>
+                <div class="staff-count" id="staffCount">Loading...</div>
+            </div>
+            <button class="add-staff-btn"><i class="fas fa-plus"></i> Add Staff Member</button>
+        </div>
+
+        <!-- Tabs for role types -->
+        <div class="role-tabs">
+            <button class="role-tab active" data-role="super-admin">
+                <i class="fas fa-crown"></i> Super Admin
+            </button>
+            <button class="role-tab" data-role="admin">
+                <i class="fas fa-user-shield"></i> Admin
+            </button>
+            <button class="role-tab" data-role="all">
+                <i class="fas fa-list"></i> All Staff
+            </button>
+        </div>
+
+        <!-- Staff Controls -->
+        <div class="staff-controls">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search by name, email, role...">
+            </div>
+            <div class="filters">
+                <select class="filter-select" id="roleFilter">
+                    <option value="">All Roles</option>
+                    <option value="Super Admin">Super Admin</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Supervisor">Supervisor</option>
+                </select>
+                <select class="filter-select" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Disabled">Disabled</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Staff Table -->
+        <div class="table-container">
+            <table class="staff-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll"></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        <th>Permissions</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="staffTableBody">
+                    <!-- Staff data will be loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+            <button class="pagination-btn" id="prevBtn"><i class="fas fa-chevron-left"></i></button>
+            <div class="pagination-info">
+                <span id="pageInfo">Page 1 of 1</span>
+            </div>
+            <button class="pagination-btn" id="nextBtn"><i class="fas fa-chevron-right"></i></button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Staff Modal -->
+    <div class="modal" id="addStaffModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Staff Member</h2>
+                <button class="modal-close" data-modal="addStaffModal">&times;</button>
+            </div>
+            <form id="addStaffForm" class="staff-form">
+                <div class="form-group">
+                    <label for="staffName">Full Name *</label>
+                    <input type="text" id="staffName" name="staffName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="staffEmail">Email *</label>
+                    <input type="email" id="staffEmail" name="staffEmail" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="staffRole">Role *</label>
+                        <select id="staffRole" name="staffRole" required>
+                            <option value="">Select Role</option>
+                            <option value="Super Admin">Super Admin</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Supervisor">Supervisor</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="staffDepartment">Department</label>
+                        <select id="staffDepartment" name="staffDepartment">
+                            <option value="">Select Department</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Permissions</label>
+                    <div class="permissions-grid" id="permissionsGrid">
+                        <!-- Permissions will be loaded dynamically based on role -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="staffStatus">Status</label>
+                    <select id="staffStatus" name="staffStatus">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Disabled">Disabled</option>
+                    </select>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" data-modal="addStaffModal">Cancel</button>
+                    <button type="submit" class="btn-submit">Save Staff Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Permissions Details Modal -->
+    <div class="modal" id="permissionsModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Manage Permissions - <span id="permissionStaffName"></span></h2>
+                <button class="modal-close" data-modal="permissionsModal">&times;</button>
+            </div>
+            <div class="permissions-container">
+                <div class="permission-section">
+                    <h3><i class="fas fa-users"></i> Staff Management</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_staff" class="permission-checkbox">
+                            <span>View Staff</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="add_staff" class="permission-checkbox">
+                            <span>Add Staff</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="edit_staff" class="permission-checkbox">
+                            <span>Edit Staff</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="delete_staff" class="permission-checkbox">
+                            <span>Delete Staff</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="manage_permissions" class="permission-checkbox">
+                            <span>Manage Permissions</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="permission-section">
+                    <h3><i class="fas fa-users"></i> Patient Management</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_patient" class="permission-checkbox">
+                            <span>View Patients</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="add_patient" class="permission-checkbox">
+                            <span>Add Patient</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="edit_patient" class="permission-checkbox">
+                            <span>Edit Patient</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="delete_patient" class="permission-checkbox">
+                            <span>Delete Patient</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="permission-section">
+                    <h3><i class="fas fa-laptop"></i> Device Management</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_device" class="permission-checkbox">
+                            <span>View Devices</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="add_device" class="permission-checkbox">
+                            <span>Add Device</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="edit_device" class="permission-checkbox">
+                            <span>Edit Device</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="delete_device" class="permission-checkbox">
+                            <span>Delete Device</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="permission-section">
+                    <h3><i class="fas fa-building"></i> Department Management</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_department" class="permission-checkbox">
+                            <span>View Departments</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="add_department" class="permission-checkbox">
+                            <span>Add Department</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="edit_department" class="permission-checkbox">
+                            <span>Edit Department</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="delete_department" class="permission-checkbox">
+                            <span>Delete Department</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="permission-section">
+                    <h3><i class="fas fa-file-alt"></i> Reports & Analytics</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_reports" class="permission-checkbox">
+                            <span>View Reports</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="export_reports" class="permission-checkbox">
+                            <span>Export Reports</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_analytics" class="permission-checkbox">
+                            <span>View Analytics</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="permission-section">
+                    <h3><i class="fas fa-cog"></i> System Settings</h3>
+                    <div class="permission-items">
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_settings" class="permission-checkbox">
+                            <span>View Settings</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="edit_settings" class="permission-checkbox">
+                            <span>Edit Settings</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="view_audit_logs" class="permission-checkbox">
+                            <span>View Audit Logs</span>
+                        </label>
+                        <label class="permission-item">
+                            <input type="checkbox" value="manage_backup" class="permission-checkbox">
+                            <span>Manage Backups</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" data-modal="permissionsModal">Cancel</button>
+                <button type="button" class="btn-submit" id="savePermissionsBtn">Save Permissions</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Modal -->
+    <div class="modal" id="logoutModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Confirm Logout</h2>
+                <button class="modal-close" data-modal="logoutModal">&times;</button>
+            </div>
+            <p style="margin-bottom: 24px; color: #6b7280;">Are you sure you want to logout?</p>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" data-modal="logoutModal">Cancel</button>
+                <button type="button" class="btn-danger" onclick="performLogout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/dashboard.js"></script>
+    <script src="../js/staff-management.js"></script>
+</body>
+</html>

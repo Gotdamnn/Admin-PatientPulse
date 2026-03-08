@@ -280,3 +280,70 @@ CREATE INDEX IF NOT EXISTS idx_system_activity_created ON system_activity(create
 CREATE INDEX IF NOT EXISTS idx_system_activity_type ON system_activity(activity_type);
 CREATE INDEX IF NOT EXISTS idx_report_snapshots_date ON report_snapshots(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_department_stats_date ON department_stats(stat_date);
+
+-- ===== STAFF MANAGEMENT TABLES =====
+CREATE TABLE IF NOT EXISTS staff (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) CHECK (role IN ('Super Admin', 'Admin', 'Manager', 'Supervisor')) NOT NULL,
+    department VARCHAR(255),
+    status VARCHAR(50) CHECK (status IN ('Active', 'Inactive', 'Disabled')) DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS staff_permissions (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE NOT NULL,
+    permission VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ===== AUDIT LOGS TABLE =====
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    admin_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+    admin_name VARCHAR(255) NOT NULL,
+    action VARCHAR(50) CHECK (action IN ('Create', 'Update', 'Delete', 'Login', 'Logout', 'View', 'Export')) NOT NULL,
+    table_name VARCHAR(100) NOT NULL,
+    target_id INTEGER,
+    ip_address VARCHAR(45),
+    before_state JSONB,
+    after_state JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert default staff members
+INSERT INTO staff (name, email, role, department, status) VALUES
+    ('John Administrator', 'john.admin@hospital.com', 'Super Admin', 'Administration', 'Active'),
+    ('Sarah Manager', 'sarah.manager@hospital.com', 'Admin', 'IT', 'Active'),
+    ('Michael Johnson', 'michael.johnson@hospital.com', 'Manager', 'HR', 'Active'),
+    ('Emily Davis', 'emily.davis@hospital.com', 'Supervisor', 'Nursing', 'Active'),
+    ('Robert Wilson', 'robert.wilson@hospital.com', 'Admin', 'Medical Records', 'Inactive')
+ON CONFLICT (email) DO NOTHING;
+
+-- Insert default permissions for Super Admin
+INSERT INTO staff_permissions (staff_id, permission)
+SELECT s.id, permission FROM staff s,
+(VALUES 
+    ('view_staff'), ('add_staff'), ('edit_staff'), ('delete_staff'), ('manage_permissions'),
+    ('view_patient'), ('add_patient'), ('edit_patient'), ('delete_patient'),
+    ('view_device'), ('add_device'), ('edit_device'), ('delete_device'),
+    ('view_department'), ('add_department'), ('edit_department'), ('delete_department'),
+    ('view_reports'), ('export_reports'), ('view_analytics'),
+    ('view_settings'), ('edit_settings'), ('view_audit_logs'), ('manage_backup')
+) AS perms(permission)
+WHERE s.email = 'john.admin@hospital.com'
+ON CONFLICT DO NOTHING;
+
+-- Create indexes for staff and audit logs
+CREATE INDEX IF NOT EXISTS idx_staff_email ON staff(email);
+CREATE INDEX IF NOT EXISTS idx_staff_role ON staff(role);
+CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
+CREATE INDEX IF NOT EXISTS idx_staff_permissions_staff_id ON staff_permissions(staff_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id ON audit_logs(admin_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_table_name ON audit_logs(table_name);

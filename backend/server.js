@@ -1070,6 +1070,272 @@ app.get('/settings', (req, res) => res.render('settings', { title: 'Settings' })
 // Reports
 app.get('/reports', (req, res) => res.render('reports', { title: 'Reports' }));
 
+// Staff Management
+app.get('/staff-management', (req, res) => res.render('staff-management', { title: 'Staff Management' }));
+
+// Audit Logs
+app.get('/audit-logs', (req, res) => res.render('audit-logs', { title: 'Audit Logs' }));
+
+// ===== STAFF MANAGEMENT API =====
+// Get all staff members
+app.get('/api/staff', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM staff ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get staff by ID
+app.get('/api/staff/:id', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM staff WHERE id = $1', [req.params.id]);
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'Staff not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get staff permissions
+app.get('/api/staff/:id/permissions', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT permission FROM staff_permissions WHERE staff_id = $1', [req.params.id]);
+        const permissions = result.rows.map(row => row.permission);
+        res.json(permissions);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Create new staff member
+app.post('/api/staff', async (req, res) => {
+    const { name, email, role, department, status, permissions } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Insert staff member
+        const staffResult = await client.query(
+            'INSERT INTO staff (name, email, role, department, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [name, email, role, department, status || 'Active']
+        );
+        const staffId = staffResult.rows[0].id;
+
+        // Insert permissions
+        if (permissions && permissions.length > 0) {
+            for (const permission of permissions) {
+                await client.query(
+                    'INSERT INTO staff_permissions (staff_id, permission) VALUES ($1, $2)',
+                    [staffId, permission]
+                );
+            }
+        }
+
+        // Log action
+        await client.query(
+            'INSERT INTO audit_logs (admin_name, action, table_name, target_id, after_state) VALUES ($1, $2, $3, $4, $5)',
+            ['Admin', 'Create', 'staff', staffId, JSON.stringify(staffResult.rows[0])]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(staffResult.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Update staff member
+app.put('/api/staff/:id', async (req, res) => {
+    const { name, email, role, department, status, permissions } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Get before state
+        const beforeResult = await client.query('SELECT * FROM staff WHERE id = $1', [req.params.id]);
+        const beforeState = beforeResult.rows[0];
+
+        // Update staff member
+        const updateResult = await client.query(
+            'UPDATE staff SET name = $1, email = $2, role = $3, department = $4, status = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
+            [name, email, role, department, status, req.params.id]
+        );
+
+        if (updateResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Staff not found' });
+        }
+
+        // Update permissions
+        if (permissions) {
+            await client.query('DELETE FROM staff_permissions WHERE staff_id = $1', [req.params.id]);
+            for (const permission of permissions) {
+                await client.query(
+                    'INSERT INTO staff_permissions (staff_id, permission) VALUES ($1, $2)',
+                    [req.params.id, permission]
+                );
+            }
+        }
+
+        // Log action
+        await client.query(
+            'INSERT INTO audit_logs (admin_name, action, table_name, target_id, before_state, after_state) VALUES ($1, $2, $3, $4, $5, $6)',
+            ['Admin', 'Update', 'staff', req.params.id, JSON.stringify(beforeState), JSON.stringify(updateResult.rows[0])]
+        );
+
+        await client.query('COMMIT');
+        res.json(updateResult.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Delete staff member
+app.delete('/api/staff/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Get before state
+        const beforeResult = await client.query('SELECT * FROM staff WHERE id = $1', [req.params.id]);
+        if (beforeResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Staff not found' });
+        }
+        const beforeState = beforeResult.rows[0];
+
+        // Delete permissions
+        await client.query('DELETE FROM staff_permissions WHERE staff_id = $1', [req.params.id]);
+
+        // Delete staff
+        await client.query('DELETE FROM staff WHERE id = $1', [req.params.id]);
+
+        // Log action
+        await client.query(
+            'INSERT INTO audit_logs (admin_name, action, table_name, target_id, before_state) VALUES ($1, $2, $3, $4, $5)',
+            ['Admin', 'Delete', 'staff', req.params.id, JSON.stringify(beforeState)]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Staff member deleted' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ===== AUDIT LOGS API =====
+// Get all audit logs with filtering
+app.get('/api/audit-logs', async (req, res) => {
+    const { adminName, action, tableName, dateFrom, dateTo } = req.query;
+    try {
+        let query = 'SELECT * FROM audit_logs WHERE 1 = 1';
+        const params = [];
+        let paramIndex = 1;
+
+        if (adminName) {
+            query += ` AND admin_name ILIKE $${paramIndex}`;
+            params.push(`%${adminName}%`);
+            paramIndex++;
+        }
+
+        if (action) {
+            query += ` AND action = $${paramIndex}`;
+            params.push(action);
+            paramIndex++;
+        }
+
+        if (tableName) {
+            query += ` AND table_name = $${paramIndex}`;
+            params.push(tableName);
+            paramIndex++;
+        }
+
+        if (dateFrom) {
+            query += ` AND timestamp >= $${paramIndex}`;
+            params.push(dateFrom);
+            paramIndex++;
+        }
+
+        if (dateTo) {
+            query += ` AND timestamp <= $${paramIndex}`;
+            params.push(dateTo + ' 23:59:59');
+            paramIndex++;
+        }
+
+        query += ' ORDER BY timestamp DESC LIMIT 1000';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get audit log by ID
+app.get('/api/audit-logs/:id', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM audit_logs WHERE id = $1', [req.params.id]);
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'Audit log not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Create audit log entry (for activity tracking)
+app.post('/api/audit-logs', async (req, res) => {
+    const { admin_name, action, table_name, target_id, ip_address, before_state, after_state } = req.body;
+    try {
+        const result = await pool.query(
+            'INSERT INTO audit_logs (admin_name, action, table_name, target_id, ip_address, before_state, after_state) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            [admin_name, action, table_name, target_id, ip_address, before_state ? JSON.stringify(before_state) : null, after_state ? JSON.stringify(after_state) : null]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export audit logs as CSV
+app.get('/api/audit-logs/export/csv', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM audit_logs ORDER BY timestamp DESC');
+        
+        let csv = 'Timestamp,Admin Name,Action,Table,Target ID,IP Address,Before State,After State\n';
+        
+        result.rows.forEach(log => {
+            const timestamp = new Date(log.timestamp).toLocaleString();
+            const beforeState = log.before_state ? JSON.stringify(log.before_state).replace(/"/g, '""') : '';
+            const afterState = log.after_state ? JSON.stringify(log.after_state).replace(/"/g, '""') : '';
+            
+            csv += `"${timestamp}","${log.admin_name}","${log.action}","${log.table_name}","${log.target_id || ''}","${log.ip_address || ''}","${beforeState}","${afterState}"\n`;
+        });
+        
+        res.set('Content-Type', 'text/csv');
+        res.set('Content-Disposition', 'attachment; filename="audit-logs.csv"');
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`PatientPulse server running on port ${PORT}`);
