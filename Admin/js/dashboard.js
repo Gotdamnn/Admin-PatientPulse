@@ -404,6 +404,156 @@ function confirmLogout() {
     window.location.href = '/login';
 }
 
+// ===== CUSTOM MODAL FUNCTION =====
+function showConfirmModal(message, onConfirm, onCancel) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-dialog-custom';
+    
+    dialog.innerHTML = `
+        <div class="modal-title-custom">Confirm Action</div>
+        <div class="modal-message">${message}</div>
+        <div class="modal-buttons">
+            <button class="btn-modal btn-modal-secondary" id="cancelBtn">Cancel</button>
+            <button class="btn-modal btn-modal-primary" id="confirmBtn">OK</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    
+    // Add inline styles if not already present
+    if (!document.querySelector('#modalCustomStyles')) {
+        const style = document.createElement('style');
+        style.id = 'modalCustomStyles';
+        style.textContent = `
+            .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            }
+            
+            .modal-dialog-custom {
+                background: #ffffff;
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                padding: 30px;
+                max-width: 500px;
+                width: 90%;
+                animation: modalSlideIn 0.3s ease-out;
+            }
+            
+            @keyframes modalSlideIn {
+                from {
+                    transform: scale(0.9);
+                    opacity: 0;
+                }
+                to {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            .modal-title-custom {
+                font-size: 20px;
+                font-weight: 600;
+                color: #1f2937;
+                margin-bottom: 12px;
+            }
+            
+            .modal-message {
+                font-size: 16px;
+                color: #6b7280;
+                margin-bottom: 24px;
+                line-height: 1.5;
+            }
+            
+            .modal-buttons {
+                display: flex;
+                gap: 12px;
+                justify-content: flex-end;
+            }
+            
+            .btn-modal {
+                padding: 10px 24px;
+                border-radius: 8px;
+                border: none;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .btn-modal-secondary {
+                background: #f3f4f6;
+                color: #374151;
+            }
+            
+            .btn-modal-secondary:hover {
+                background: #e5e7eb;
+            }
+            
+            .btn-modal-secondary:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            
+            .btn-modal-primary {
+                background: #3b82f6;
+                color: white;
+            }
+            
+            .btn-modal-primary:hover {
+                background: #2563eb;
+            }
+            
+            .btn-modal-primary:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    const confirmBtn = document.getElementById('confirmBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    let isProcessing = false;
+    
+    const closeModal = () => {
+        overlay.remove();
+        document.body.style.overflow = '';
+    };
+    
+    confirmBtn.addEventListener('click', async () => {
+        if (isProcessing) return;
+        isProcessing = true;
+        confirmBtn.disabled = true;
+        cancelBtn.disabled = true;
+        confirmBtn.textContent = 'Processing...';
+        
+        try {
+            if (onConfirm) await Promise.resolve(onConfirm());
+        } finally {
+            closeModal();
+        }
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+        if (onCancel) onCancel();
+        closeModal();
+    });
+}
+
 // ===== NOTIFICATION SYSTEM =====
 let notificationsList = [];
 let currentFilter = 'all';
@@ -451,29 +601,34 @@ function closeNotificationPanel() {
     }
 }
 
-// Load notifications from backend activity data
+// Load notifications from backend notifications table
 async function loadNotifications() {
     try {
-        // Fetch activity from backend
-        const response = await fetch(`${API_BASE}/dashboard/activity?limit=50`);
+        // Fetch notifications from backend with cache-busting
+        const response = await fetch(`${API_BASE}/notifications?t=${Date.now()}`, {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache'
+            }
+        });
         if (response.ok) {
-            const activities = await response.json();
-            // Convert activities to notification format
-            notificationsList = activities.map(activity => ({
-                id: activity.id,
-                title: activity.title,
-                message: activity.description,
-                type: activity.type.split('_')[activity.type.split('_').length - 1], // Extract action type (created, updated, deleted)
-                icon: activity.icon,
-                timestamp: new Date(activity.timestamp),
-                read: false,
-                category: 'System'
+            const notifications = await response.json();
+            // Map notifications from database
+            notificationsList = notifications.map(notif => ({
+                id: notif.id,
+                title: notif.title,
+                message: notif.message,
+                type: notif.type,
+                icon: notif.icon || 'fas fa-bell',
+                timestamp: new Date(notif.created_at),
+                read: notif.read,
+                category: notif.category || 'System'
             }));
         } else {
             notificationsList = [];
         }
     } catch (error) {
-        console.log('Loading notifications from activity data:', error.message);
+        console.log('Loading notifications from backend:', error.message);
         notificationsList = [];
     }
     
@@ -630,54 +785,98 @@ function markNotificationAsRead(id) {
     }
 }
 
-// Clear all notifications
-function clearAllNotifications() {
-    if (confirm('Are you sure you want to clear all notifications?')) {
-        // Send to backend
-        fetch(`${API_BASE}/notifications`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        }).then(res => {
-            if (res.ok) {
+// Clear all notifications  
+async function clearAllNotifications() {
+    showConfirmModal(
+        'Are you sure you want to clear all notifications?',
+        async () => {
+            try {
+                console.log('Starting clear notifications...');
+                
+                // First, clear the UI immediately
                 notificationsList = [];
                 updateNotificationUI();
+                console.log('UI cleared, notificationsList is now:', notificationsList);
+                
+                // Then send to backend with cache-busting
+                const response = await fetch(`${API_BASE}/notifications?t=${Date.now()}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                
+                console.log('Delete request completed, status:', response.status);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Backend cleared:', result);
+                    
+                    // Close notification panel
+                    closeNotificationPanel();
+                    
+                    // Show success message
+                    showNotificationToast('✓ Success', 'All notifications have been cleared', 'deleted');
+                    
+                    // Reload to verify backend is clear
+                    loadNotifications();
+                } else {
+                    console.error('Failed to clear notifications on backend, status:', response.status);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    // Reload notifications from backend in case of error
+                    loadNotifications();
+                    showNotificationToast('Error', 'Failed to clear notifications', 'error');
+                }
+            } catch (err) {
+                console.error('Error clearing notifications:', err);
+                // Reload notifications from backend in case of error
+                loadNotifications();
+                showNotificationToast('Error', 'An error occurred while clearing notifications', 'error');
             }
-        }).catch(err => console.log('Could not sync with backend:', err));
-    }
+        }
+    );
 }
 
-// Start listening for new notifications (by polling activities)
+// Start listening for new notifications (by polling notifications)
 function startNotificationListener() {
     let lastCheckTime = new Date();
     
-    // Poll for new activities/notifications every 10 seconds
+    // Poll for new notifications every 10 seconds
     setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE}/dashboard/activity?limit=50`);
+            const response = await fetch(`${API_BASE}/notifications?t=${Date.now()}`, {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
             if (response.ok) {
-                const activities = await response.json();
-                const newActivities = activities.map(activity => ({
-                    id: activity.id,
-                    title: activity.title,
-                    message: activity.description,
-                    type: activity.type.split('_')[activity.type.split('_').length - 1],
-                    icon: activity.icon,
-                    timestamp: new Date(activity.timestamp),
-                    read: false,
-                    category: 'System'
+                const notifications = await response.json();
+                const newNotifications = notifications.map(notif => ({
+                    id: notif.id,
+                    title: notif.title,
+                    message: notif.message,
+                    type: notif.type,
+                    icon: notif.icon || 'fas fa-bell',
+                    timestamp: new Date(notif.created_at),
+                    read: notif.read,
+                    category: notif.category || 'System'
                 }));
                 
                 // Check for new notifications
                 const existingIds = notificationsList.map(n => n.id);
-                const newNotifications = newActivities.filter(n => !existingIds.includes(n.id));
+                const addedNotifications = newNotifications.filter(n => !existingIds.includes(n.id));
                 
-                if (newNotifications && newNotifications.length > 0) {
+                if (addedNotifications && addedNotifications.length > 0) {
                     // Add new notifications to the list
-                    notificationsList = [...newNotifications, ...notificationsList];
+                    notificationsList = [...addedNotifications, ...notificationsList];
                     updateNotificationUI();
                     
                     // Show toast for each new notification
-                    newNotifications.forEach(notif => {
+                    addedNotifications.forEach(notif => {
                         showNotificationToast(notif.title, notif.message, notif.type);
                     });
                 }

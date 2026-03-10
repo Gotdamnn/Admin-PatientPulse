@@ -12,18 +12,25 @@ app.use(cors());
 
 // EJS view engine setup
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+app.set('views', path.join(__dirname, '../routings'));
 
-// Serve static files (CSS, JS, images)
-app.use('/css', express.static(path.join(__dirname, '../Admin/css')));
-app.use('/js', express.static(path.join(__dirname, '../Admin/js')));
+// Serve static files (CSS, JS, images) - BEFORE cache headers
+app.use('/css', express.static(path.join(__dirname, '../Admin/css'), { 
+    setHeaders: (res) => res.set('Content-Type', 'text/css; charset=utf-8')
+}));
+app.use('/js', express.static(path.join(__dirname, '../Admin/js'), {
+    setHeaders: (res) => res.set('Content-Type', 'application/javascript; charset=utf-8')
+}));
 app.use('/images', express.static(path.join(__dirname, '../images')));
 
-// Serve HTML files with no-cache headers
+// Serve HTML files with no-cache headers (AFTER static CSS/JS)
 app.use((req, res, next) => {
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
+    // Only apply no-cache to HTML and API requests
+    if (req.path.endsWith('.html') || req.path.startsWith('/api') || req.path.startsWith('/')) {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+    }
     next();
 });
 app.use(express.static(path.join(__dirname, '../Admin/html')));
@@ -1435,6 +1442,9 @@ app.get('/devices', (req, res) => res.render('devices', { title: 'Devices' }));
 // Employees
 app.get('/employees', (req, res) => res.render('employees', { title: 'Employees' }));
 
+// Employee Reports
+app.get('/employee-reports', (req, res) => res.render('employee-reports', { title: 'Employee Reports', activePage: 'employee-reports' }));
+
 // Departments
 app.get('/departments', (req, res) => res.render('departments', { title: 'Departments' }));
 
@@ -2499,6 +2509,373 @@ app.get('/api/rbac/role/:roleId/permissions', async (req, res) => {
 
         res.json({ success: true, role });
     } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ===== EMPLOYEE REPORTS API =====
+// Get all employee reports with filtering
+app.get('/api/employee-reports', async (req, res) => {
+    try {
+        const { search, status, severity, reportType, department, page = 1, limit = 10 } = req.query;
+        const offset = (page - 1) * limit;
+
+        console.log('📥 Fetching employee reports with filters:', { search, status, severity, reportType, department, page, limit });
+
+        let query = 'SELECT * FROM employee_reports WHERE 1=1';
+        let countQuery = 'SELECT COUNT(*) as count FROM employee_reports WHERE 1=1';
+        const params = [];
+
+        // Apply filters
+        if (search) {
+            query += ` AND (employee_name ILIKE $${params.length + 1} OR department_name ILIKE $${params.length + 1} OR title ILIKE $${params.length + 1})`;
+            countQuery += ` AND (employee_name ILIKE $${params.length + 1} OR department_name ILIKE $${params.length + 1} OR title ILIKE $${params.length + 1})`;
+            params.push(`%${search}%`);
+        }
+
+        if (status) {
+            query += ` AND status = $${params.length + 1}`;
+            countQuery += ` AND status = $${params.length + 1}`;
+            params.push(status);
+        }
+
+        if (severity) {
+            query += ` AND severity = $${params.length + 1}`;
+            countQuery += ` AND severity = $${params.length + 1}`;
+            params.push(severity);
+        }
+
+        if (reportType) {
+            query += ` AND report_type = $${params.length + 1}`;
+            countQuery += ` AND report_type = $${params.length + 1}`;
+            params.push(reportType);
+        }
+
+        if (department) {
+            query += ` AND department_id = $${params.length + 1}`;
+            countQuery += ` AND department_id = $${params.length + 1}`;
+            params.push(department);
+        }
+
+        // Get total count
+        const countResult = await pool.query(countQuery, params);
+        const total = parseInt(countResult.rows[0].count) || 0;
+
+        console.log(`📊 Total reports found: ${total}`);
+
+        // Get paginated data
+        query += ` ORDER BY report_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        const queryParams = [...params, parseInt(limit), parseInt(offset)];
+
+        const result = await pool.query(query, queryParams);
+        
+        console.log(`✅ Returning ${result.rows.length} reports`);
+
+        res.json({
+            success: true,
+            data: result.rows,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (err) {
+        console.error('❌ Error fetching employee reports:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get single employee report
+app.get('/api/employee-reports/:id', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM employee_reports WHERE report_id = $1', [req.params.id]);
+        if (result.rows.length > 0) {
+            res.json({ success: true, data: result.rows[0] });
+        } else {
+            res.status(404).json({ success: false, error: 'Report not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Create new employee report
+app.post('/api/employee-reports', async (req, res) => {
+    try {
+        const {
+            employee_id, employee_name, department_id, department_name,
+            report_type, category, title, description, reported_by, reported_by_id,
+            severity, priority
+        } = req.body;
+
+        const result = await pool.query(
+            `INSERT INTO employee_reports 
+            (employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, reported_by_id, severity, priority, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Open')
+            RETURNING *`,
+            [employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, reported_by_id, severity, priority]
+        );
+
+        logAudit('employee_reports', 'Create', result.rows[0].report_id, null, result.rows[0]);
+        res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Update employee report
+app.put('/api/employee-reports/:id', async (req, res) => {
+    try {
+        const {
+            status, severity, priority, assigned_to, assigned_to_id,
+            resolution_notes, action_taken, investigation_report, follow_up_date
+        } = req.body;
+
+        const beforeResult = await pool.query('SELECT * FROM employee_reports WHERE report_id = $1', [req.params.id]);
+        const beforeState = beforeResult.rows[0];
+
+        const result = await pool.query(
+            `UPDATE employee_reports 
+            SET status = $1, severity = $2, priority = $3, assigned_to = $4, assigned_to_id = $5,
+                resolution_notes = $6, action_taken = $7, investigation_report = $8, follow_up_date = $9,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE report_id = $10
+            RETURNING *`,
+            [status, severity, priority, assigned_to, assigned_to_id, resolution_notes, action_taken, investigation_report, follow_up_date, req.params.id]
+        );
+
+        if (result.rows.length > 0) {
+            // If status is 'Closed', set closed_at timestamp
+            if (status === 'Closed') {
+                await pool.query('UPDATE employee_reports SET closed_at = CURRENT_TIMESTAMP WHERE report_id = $1', [req.params.id]);
+            }
+            logAudit('employee_reports', 'Update', req.params.id, beforeState, result.rows[0]);
+            res.json({ success: true, data: result.rows[0] });
+        } else {
+            res.status(404).json({ success: false, error: 'Report not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Resolve/Close employee report
+app.put('/api/employee-reports/:id/resolve', async (req, res) => {
+    try {
+        const { resolution_notes, action_taken } = req.body;
+
+        const result = await pool.query(
+            `UPDATE employee_reports 
+            SET status = 'Resolved', resolution_notes = $1, action_taken = $2, 
+                resolution_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE report_id = $3
+            RETURNING *`,
+            [resolution_notes, action_taken, req.params.id]
+        );
+
+        if (result.rows.length > 0) {
+            res.json({ success: true, data: result.rows[0] });
+        } else {
+            res.status(404).json({ success: false, error: 'Report not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Delete employee report
+app.delete('/api/employee-reports/:id', async (req, res) => {
+    try {
+        const beforeResult = await pool.query('SELECT * FROM employee_reports WHERE report_id = $1', [req.params.id]);
+        const beforeState = beforeResult.rows[0];
+
+        const result = await pool.query('DELETE FROM employee_reports WHERE report_id = $1 RETURNING *', [req.params.id]);
+        if (result.rows.length > 0) {
+            logAudit('employee_reports', 'Delete', req.params.id, beforeState, null);
+            res.json({ success: true, message: 'Report deleted' });
+        } else {
+            res.status(404).json({ success: false, error: 'Report not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get employee reports statistics
+app.get('/api/employee-reports-stats/summary', async (req, res) => {
+    try {
+        const summaryResult = await pool.query(`
+            SELECT 
+                COALESCE(COUNT(*), 0) as total_reports,
+                COALESCE(SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END), 0) as open_reports,
+                COALESCE(SUM(CASE WHEN severity = 'Critical' THEN 1 ELSE 0 END), 0) as critical_reports,
+                COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) as resolved
+            FROM employee_reports
+        `);
+
+        const byEmployeeResult = await pool.query(`
+            SELECT employee_name, COUNT(*) as report_count
+            FROM employee_reports
+            GROUP BY employee_name
+            ORDER BY report_count DESC
+            LIMIT 10
+        `);
+
+        const byTypeResult = await pool.query(`
+            SELECT report_type, COUNT(*) as count
+            FROM employee_reports
+            GROUP BY report_type
+        `);
+
+        const bySeverityResult = await pool.query(`
+            SELECT severity, COUNT(*) as count
+            FROM employee_reports
+            GROUP BY severity
+        `);
+
+        console.log('📊 Employee Reports Summary:', {
+            total: summaryResult.rows[0].total_reports,
+            open: summaryResult.rows[0].open_reports,
+            critical: summaryResult.rows[0].critical_reports,
+            resolved: summaryResult.rows[0].resolved
+        });
+
+        res.json({
+            success: true,
+            data: {
+                summary: {
+                    total_reports: parseInt(summaryResult.rows[0].total_reports) || 0,
+                    open_reports: parseInt(summaryResult.rows[0].open_reports) || 0,
+                    critical_reports: parseInt(summaryResult.rows[0].critical_reports) || 0,
+                    resolved: parseInt(summaryResult.rows[0].resolved) || 0
+                },
+                by_employee: byEmployeeResult.rows || [],
+                by_type: byTypeResult.rows || [],
+                by_severity: bySeverityResult.rows || []
+            }
+        });
+    } catch (err) {
+        console.error('❌ Error fetching statistics:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get reports by department
+app.get('/api/employee-reports-by-department/:departmentId', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM employee_reports 
+            WHERE department_id = $1
+            ORDER BY report_date DESC`,
+            [req.params.departmentId]
+        );
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ===== DEBUG/TEST ENDPOINTS =====
+// Test endpoint to verify employee reports table exists and has data
+app.get('/api/debug/employee-reports-check', async (req, res) => {
+    try {
+        // Check if table exists
+        const tableCheck = await pool.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'employee_reports'
+            )
+        `);
+        
+        const tableExists = tableCheck.rows[0].exists;
+        
+        if (!tableExists) {
+            return res.json({
+                status: 'error',
+                message: 'employee_reports table does not exist',
+                solution: 'Run database migrations using: node init-db.js'
+            });
+        }
+
+        // Get table statistics
+        const statsResult = await pool.query(`
+            SELECT 
+                COUNT(*) as total_records,
+                MAX(created_at) as last_record
+            FROM employee_reports
+        `);
+        
+        const stats = statsResult.rows[0];
+
+        res.json({
+            status: 'success',
+            table_exists: tableExists,
+            total_records: parseInt(stats.total_records) || 0,
+            last_record: stats.last_record,
+            message: parseInt(stats.total_records) > 0 
+                ? 'Table exists with data' 
+                : 'Table exists but is empty. Create a report to get started!'
+        });
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            message: err.message,
+            solution: 'Check database connection and ensure migrations have run'
+        });
+    }
+});
+
+// Insert sample employee report (for testing)
+app.post('/api/debug/create-sample-report', async (req, res) => {
+    try {
+        // Get first employee
+        const empResult = await pool.query('SELECT employee_id, first_name, last_name, department_id FROM employees LIMIT 1');
+        
+        if (empResult.rows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No employees found. Please add employees before creating reports.'
+            });
+        }
+
+        const emp = empResult.rows[0];
+
+        // Get department name
+        const deptResult = await pool.query('SELECT department_name FROM departments WHERE department_id = $1', [emp.department_id]);
+        const deptName = deptResult.rows.length > 0 ? deptResult.rows[0].department_name : 'Unknown';
+
+        // Insert sample report
+        const result = await pool.query(`
+            INSERT INTO employee_reports 
+            (employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, severity, priority, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING *
+        `, [
+            emp.employee_id,
+            `${emp.first_name} ${emp.last_name}`,
+            emp.department_id,
+            deptName,
+            'Complaint',
+            'Performance Issue',
+            'Sample Report - Please Delete',
+            'This is a sample employee report created for testing purposes. Feel free to delete this report.',
+            'System',
+            'Medium',
+            'Normal',
+            'Open'
+        ]);
+
+        console.log('✅ Sample report created:', result.rows[0].report_id);
+
+        res.json({
+            success: true,
+            message: 'Sample report created successfully!',
+            report: result.rows[0]
+        });
+    } catch (err) {
+        console.error('❌ Error creating sample report:', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });

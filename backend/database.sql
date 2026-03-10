@@ -318,6 +318,60 @@ CREATE INDEX IF NOT EXISTS idx_staff_email ON staff(email);
 CREATE INDEX IF NOT EXISTS idx_staff_role ON staff(role);
 CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
 
+-- ===== EMPLOYEE REPORTS & COMPLAINTS SYSTEM =====
+CREATE TABLE IF NOT EXISTS employee_reports (
+    report_id SERIAL PRIMARY KEY,
+    
+    -- Report Details
+    employee_id INTEGER REFERENCES employees(employee_id) ON DELETE CASCADE,
+    employee_name VARCHAR(255) NOT NULL,
+    department_id INTEGER REFERENCES departments(department_id) ON DELETE SET NULL,
+    department_name VARCHAR(255),
+    
+    -- Report Information
+    report_type VARCHAR(50) CHECK (report_type IN ('Complaint', 'Incident', 'Disciplinary', 'Performance', 'Safety', 'Conduct', 'Other')) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    
+    -- Reporting Details
+    reported_by VARCHAR(255),
+    reported_by_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+    report_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Status & Resolution
+    status VARCHAR(50) CHECK (status IN ('Open', 'In Progress', 'Under Review', 'Resolved', 'Closed', 'On Hold')) DEFAULT 'Open',
+    severity VARCHAR(50) CHECK (severity IN ('Low', 'Medium', 'High', 'Critical')) DEFAULT 'Medium',
+    priority VARCHAR(50) CHECK (priority IN ('Low', 'Normal', 'High', 'Urgent')) DEFAULT 'Normal',
+    
+    -- Resolution Details
+    assigned_to VARCHAR(255),
+    assigned_to_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+    assigned_date TIMESTAMP,
+    resolution_date TIMESTAMP,
+    resolution_notes TEXT,
+    
+    -- Additional Fields
+    attachment_url VARCHAR(500),
+    investigation_report TEXT,
+    action_taken VARCHAR(500),
+    follow_up_date DATE,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP
+);
+
+-- Create indexes for employee_reports
+CREATE INDEX IF NOT EXISTS idx_employee_reports_employee_id ON employee_reports(employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_status ON employee_reports(status);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_severity ON employee_reports(severity);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_department ON employee_reports(department_id);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_assigned_to ON employee_reports(assigned_to_id);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_report_date ON employee_reports(report_date);
+CREATE INDEX IF NOT EXISTS idx_employee_reports_report_type ON employee_reports(report_type);
+
 -- ===== ROLE-BASED ACCESS CONTROL (RBAC) SYSTEM =====
 
 -- Permissions table: Master list of all available permissions

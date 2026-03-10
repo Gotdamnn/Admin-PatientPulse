@@ -448,26 +448,69 @@ function resolveFromModal() {
 
 // Delete alert
 async function deleteAlert(alertId) {
-    if (!confirm('Are you sure you want to delete this alert?')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/alerts/${alertId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            alertsData = alertsData.filter(a => a.id !== alertId);
-        } else {
-            // Fallback to local delete
-            alertsData = alertsData.filter(a => a.id !== alertId);
+    showConfirmModal(
+        'Are you sure you want to delete this alert?',
+        async () => {
+            try {
+                const response = await fetch(`${API_BASE}/alerts/${alertId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alertsData = alertsData.filter(a => a.id !== alertId);
+                } else {
+                    // Fallback to local delete
+                    alertsData = alertsData.filter(a => a.id !== alertId);
+                }
+            } catch (error) {
+                console.error('Error deleting alert:', error);
+                // Fallback to local delete
+                alertsData = alertsData.filter(a => a.id !== alertId);
+            }
+            
+            applyFilters();
         }
-    } catch (error) {
-        console.error('Error deleting alert:', error);
-        // Fallback to local delete
-        alertsData = alertsData.filter(a => a.id !== alertId);
-    }
+    );
+}
+
+// Show custom confirmation modal
+function showConfirmModal(message, onConfirm, onCancel) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
     
-    applyFilters();
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-dialog-custom';
+    
+    dialog.innerHTML = `
+        <div class="modal-title-custom">localhost:3001 says</div>
+        <div class="modal-buttons">
+            <button class="btn-modal btn-modal-secondary" id="cancelBtn">Cancel</button>
+            <button class="btn-modal btn-modal-primary" id="confirmBtn">OK</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    
+    const closeModal = () => {
+        overlay.remove();
+        document.body.style.overflow = '';
+    };
+    
+    document.getElementById('confirmBtn').addEventListener('click', () => {
+        if (onConfirm) onConfirm();
+        closeModal();
+    });
+    
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+        if (onCancel) onCancel();
+        closeModal();
+    });
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
 }
 
 // Helper functions
