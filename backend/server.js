@@ -1,3 +1,4 @@
+require('dotenv').config(); // Load environment variables from .env file
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -40,13 +41,14 @@ app.get('/favicon.ico', (req, res) => {
     res.status(204).end(); // No Content response
 });
 
-// PostgreSQL connection setup
+// PostgreSQL connection setup - Using environment variables for security
 const pool = new Pool({
-    user: 'postgres',  // Change to your PostgreSQL user
-    host: 'localhost',
-    database: 'appdevdb',  // Your existing database
-    password: 'Carlzabala@123',  // Change to your PostgreSQL password
-    port: 5432,
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'appdevdb',
+    password: process.env.DB_PASSWORD || 'Carlzabala@123',
+    port: process.env.DB_PORT || 5432,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 });
 
 // Test database connection with timeout
