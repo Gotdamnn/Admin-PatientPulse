@@ -57,16 +57,21 @@ const testConnection = async () => {
         const result = await pool.query('SELECT NOW()');
         console.log('✅ DATABASE CONNECTED SUCCESSFULLY');
         console.log('   Server time:', result.rows[0]);
+        console.log('   Host:', process.env.DB_HOST);
+        console.log('   Database:', process.env.DB_NAME);
         
         // Run database migrations after successful connection
         await runMigrations();
     } catch (err) {
         console.error('❌ DATABASE CONNECTION FAILED');
         console.error('   Error:', err.message);
+        console.error('   Host:', process.env.DB_HOST);
+        console.error('   User:', process.env.DB_USER);
+        console.error('   SSL:', process.env.DB_SSL);
         console.error('   Please check:');
         console.error('   - Is PostgreSQL running?');
-        console.error('   - Is pgAdmin accessible?');
-        console.error('   - Database credentials correct? (user: postgres, host: localhost, database: appdevdb)');
+        console.error('   - Can reach host:', process.env.DB_HOST);
+        console.error('   - Database credentials correct?');
     }
 };
 
