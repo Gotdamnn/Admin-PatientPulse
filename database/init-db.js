@@ -3,14 +3,16 @@
  * This script ensures the database schema is up-to-date
  */
 
+require('dotenv').config(); // Load environment variables
 const { Pool } = require('pg');
 
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'appdevdb',
-    password: 'Carlzabala@123',
-    port: 5432,
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'appdevdb',
+    password: process.env.DB_PASSWORD || 'Carlzabala@123',
+    port: process.env.DB_PORT || 5432,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 });
 
 // Migration: Fix the create_notification function
