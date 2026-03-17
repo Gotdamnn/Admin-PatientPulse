@@ -291,6 +291,53 @@ app.post('/api/auth/logout', async (req, res) => {
     }
 });
 
+// Registration endpoint for mobile/external clients
+app.post('/api/auth/register', async (req, res) => {
+    const { email, password, name, phone } = req.body;
+    const clientIp = getClientIp(req);
+    
+    // Validate input
+    if (!email || !password || !name) {
+        return res.status(400).json({ success: false, error: 'Email, password, and name are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+    
+    try {
+        // Check if user already exists
+        const existingUser = await pool.query('SELECT * FROM admins WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(409).json({ success: false, error: 'Email already registered' });
+        }
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Create new admin user
+        const result = await pool.query(
+            'INSERT INTO admins (email, password, name) VALUES ($1, $2, $3) RETURNING id, email, name',
+            [email, hashedPassword, name]
+        );
+        
+        const newUser = result.rows[0];
+        
+        // Log the registration
+        logAudit('users', 'Registration', newUser.id, null, { email: newUser.email, name: newUser.name }, newUser.email, clientIp);
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'User registered successfully',
+            user: newUser
+        });
+        
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(500).json({ success: false, error: 'Registration failed' });
+    }
+});
+
 // ===== SETTINGS API =====
 // Get system settings
 app.get('/api/settings', async (req, res) => {
@@ -743,6 +790,40 @@ app.get('/api/employees', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Mobile-friendly employees endpoint with consistent format
+app.get('/api/employees-list', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                employee_id as id,
+                CONCAT(first_name, ' ', last_name) as name,
+                first_name,
+                last_name,
+                email,
+                job_title,
+                department_id,
+                d.department_name,
+                status
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.department_id
+            WHERE status = 'Active' OR status IS NULL
+            ORDER BY first_name, last_name ASC
+        `);
+        
+        res.json({
+            success: true,
+            data: result.rows,
+            count: result.rows.length
+        });
+    } catch (err) {
+        res.status(500).json({ 
+            success: false,
+            error: err.message,
+            data: []
+        });
     }
 });
 
