@@ -1434,7 +1434,7 @@ app.get('/api/health', (req, res) => {
 
 // ===== EJS ROUTES =====
 // Dashboard
-app.get('/', (req, res) => res.redirect('/dashboard'));
+app.get('/', (req, res) => res.redirect('/login'));
 app.get('/dashboard', (req, res) => res.render('dashboard', { title: 'Dashboard' }));
 
 // Login
