@@ -306,35 +306,43 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     try {
-        // Check if user already exists
-        const existingUser = await pool.query('SELECT * FROM admins WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
+        // Check if patient already exists by email
+        const existingPatient = await pool.query('SELECT * FROM patients WHERE email = $1', [email]);
+        if (existingPatient.rows.length > 0) {
             return res.status(409).json({ success: false, error: 'Email already registered' });
         }
         
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Create patient record
+        const patientResult = await pool.query(
+            'INSERT INTO patients (name, email, status) VALUES ($1, $2, $3) RETURNING id, patient_id, name, email, status',
+            [name, email, 'active']
+        );
         
-        // Create new admin user
-        const result = await pool.query(
-            'INSERT INTO admins (email, password, name) VALUES ($1, $2, $3) RETURNING id, email, name',
+        const newPatient = patientResult.rows[0];
+        
+        // Also create admin user for authentication (so they can login)
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query(
+            'INSERT INTO admins (email, password, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING',
             [email, hashedPassword, name]
         );
         
-        const newUser = result.rows[0];
-        
         // Log the registration
-        logAudit('users', 'Registration', newUser.id, null, { email: newUser.email, name: newUser.name }, newUser.email, clientIp);
+        logAudit('patients', 'Patient Registration', newPatient.id, null, { 
+            patient_id: newPatient.patient_id,
+            email: newPatient.email, 
+            name: newPatient.name 
+        }, newPatient.email, clientIp);
         
         res.status(201).json({ 
             success: true, 
-            message: 'User registered successfully',
-            user: newUser
+            message: 'Patient registered successfully',
+            patient: newPatient
         });
         
     } catch (err) {
         console.error('Registration error:', err);
-        res.status(500).json({ success: false, error: 'Registration failed' });
+        res.status(500).json({ success: false, error: 'Registration failed: ' + err.message });
     }
 });
 
@@ -3093,17 +3101,44 @@ app.post('/api/employee-reports', async (req, res) => {
             severity, priority
         } = req.body;
 
+        // Validate required fields
+        if (!employee_id || !report_type || !title || !severity) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Missing required fields: employee_id, report_type, title, severity'
+            });
+        }
+
+        // Fetch employee details to ensure we have correct data
+        const employeeCheck = await pool.query(
+            'SELECT employee_id, first_name, last_name, department_id, d.department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.department_id WHERE e.employee_id = $1',
+            [employee_id]
+        );
+
+        if (employeeCheck.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Employee not found'
+            });
+        }
+
+        const employee = employeeCheck.rows[0];
+        const empName = `${employee.first_name} ${employee.last_name}`;
+        const deptId = employee.department_id;
+        const deptName = employee.department_name || department_name || '';
+
         const result = await pool.query(
             `INSERT INTO employee_reports 
             (employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, reported_by_id, severity, priority, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Open')
             RETURNING *`,
-            [employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, reported_by_id, severity, priority]
+            [employee_id, empName, deptId, deptName, report_type, category, title, description, reported_by, reported_by_id, severity, priority]
         );
 
         logAudit('employee_reports', 'Create', result.rows[0].report_id, null, result.rows[0]);
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (err) {
+        console.error('Error creating report:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
