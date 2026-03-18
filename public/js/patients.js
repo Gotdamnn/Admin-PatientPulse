@@ -460,7 +460,14 @@ async function savePatientChanges() {
             closeModal('editPatientModal');
             showStatusModal('Success', 'Patient updated successfully!', true);
         } else {
-            showStatusModal('Error', 'Error updating patient', false);
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            showStatusModal('Error', 'Error updating patient: ' + (errorData.error || 'Unknown error'), false);
         }
     } catch (error) {
         console.error('Error updating patient:', error);
@@ -503,8 +510,14 @@ async function addNewPatient() {
             closeModal('addPatientModal');
             showStatusModal('Success', 'Patient added successfully! Patient ID: ' + newPatient.patient_id, true);
         } else {
-            const error = await response.json();
-            showStatusModal('Error', 'Error adding patient: ' + (error.error || 'Unknown error'), false);
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            showStatusModal('Error', 'Error adding patient: ' + (errorData.error || 'Unknown error'), false);
         }
     } catch (error) {
         console.error('Error adding patient:', error);

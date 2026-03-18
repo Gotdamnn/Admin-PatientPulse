@@ -336,7 +336,13 @@ async function addNewDepartment(e) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
             throw new Error(errorData.error || 'Failed to add department');
         }
 
@@ -434,7 +440,13 @@ async function saveDepartmentChanges(e) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
             throw new Error(errorData.error || 'Failed to update department');
         }
 
@@ -618,7 +630,13 @@ async function confirmDelete() {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
             throw new Error(errorData.error || 'Failed to delete department');
         }
 

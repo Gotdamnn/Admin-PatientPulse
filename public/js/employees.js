@@ -485,7 +485,13 @@ async function saveEmployeeChanges(e) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
             throw new Error(errorData.error || 'Failed to update employee');
         }
 
@@ -574,7 +580,14 @@ async function confirmDelete() {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to delete employee');
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            throw new Error(errorData.error || 'Failed to delete employee');
         }
 
         closeConfirmModal();
@@ -583,7 +596,7 @@ async function confirmDelete() {
     } catch (error) {
         console.error('Error deleting employee:', error);
         closeConfirmModal();
-        showStatusModal('Error', 'Failed to delete employee. Please try again.', 'error');
+        showStatusModal('Error', error.message || 'Failed to delete employee. Please try again.', 'error');
     } finally {
         deleteEmployeeId = null;
     }

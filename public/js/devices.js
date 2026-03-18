@@ -364,8 +364,14 @@ async function addNewDevice() {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to add device');
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            throw new Error(errorData.error || 'Failed to add device');
         }
 
         document.getElementById('addDeviceForm').reset();
@@ -403,8 +409,14 @@ async function saveDeviceChanges() {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to update device');
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            throw new Error(errorData.error || 'Failed to update device');
         }
 
         closeDeviceModal('editDeviceModal');
@@ -448,8 +460,14 @@ async function confirmDelete() {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to delete device');
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText };
+            }
+            throw new Error(errorData.error || 'Failed to delete device');
         }
 
         closeConfirmModal();
@@ -460,7 +478,9 @@ async function confirmDelete() {
     } catch (error) {
         console.error('Error deleting device:', error);
         closeConfirmModal();
-        showStatusModal('Error', error.message, 'error');
+        showStatusModal('Error', error.message || 'Failed to delete device. Please try again.', 'error');
+    } finally {
+        currentEditingDeviceId = null;
     }
 }
 

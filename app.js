@@ -340,9 +340,9 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(409).json({ success: false, error: 'Email already registered' });
         }
         
-        // Create patient record
+        // Create patient record with last_visit set to current date
         const patientResult = await pool.query(
-            'INSERT INTO patients (name, email, status) VALUES ($1, $2, $3) RETURNING id, patient_id, name, email, status',
+            'INSERT INTO patients (name, email, status, last_visit) VALUES ($1, $2, $3, CURRENT_DATE) RETURNING id, patient_id, name, email, status, last_visit',
             [name, email, 'active']
         );
         
@@ -355,11 +355,12 @@ app.post('/api/auth/register', async (req, res) => {
             [email, hashedPassword, name]
         );
         
-        // Log the registration
-        await logAudit('patients', 'Patient Registration', newPatient.id, null, { 
+        // Log the registration/account creation
+        await logAudit('patients', 'Create', newPatient.id, null, { 
             patient_id: newPatient.patient_id,
             email: newPatient.email, 
-            name: newPatient.name 
+            name: newPatient.name,
+            action_type: 'Account Registration'
         }, newPatient.email, clientIp);
         
         res.status(201).json({ 
@@ -453,9 +454,10 @@ app.get('/api/patients/:id', async (req, res) => {
 // Create new patient
 app.post('/api/patients', async (req, res) => {
     const { name, status, body_temperature, last_visit, email } = req.body;
+    const clientIp = getClientIp(req);
     try {
         const result = await pool.query(
-            'INSERT INTO patients (name, status, body_temperature, last_visit, email) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            'INSERT INTO patients (name, status, body_temperature, last_visit, email) VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5) RETURNING *',
             [name, status, body_temperature, last_visit, email]
         );
         
@@ -470,7 +472,7 @@ app.post('/api/patients', async (req, res) => {
             );
         }
         
-        await logAudit('patients', 'Create', patient.id, null, patient);
+        await logAudit('patients', 'Create', patient.id, null, patient, email, clientIp);
         
         // Return patient data with success flag for mobile app
         res.status(201).json({
@@ -2371,6 +2373,7 @@ app.get('/api/staff', async (req, res) => {
 app.post('/api/staff', async (req, res) => {
     const { email, name, role, department, status } = req.body;
     const createdBy = req.headers['x-user-name'] || 'Admin';
+    const clientIp = getClientIp(req);
     
     try {
         // Validation
@@ -2412,6 +2415,15 @@ app.post('/api/staff', async (req, res) => {
             
             const newAdmin = adminResult.rows[0];
             
+            // Log account creation for staff member
+            await logAudit('users', 'Create', newAdmin.id, null, {
+                email: newAdmin.email,
+                name: newAdmin.name,
+                role: role,
+                department: department,
+                account_type: 'Staff Account'
+            }, createdBy, clientIp, newAdmin.id);
+            
             // Assign role to the new admin
             if (newAdmin && newAdmin.id) {
                 await pool.query(
@@ -2426,14 +2438,14 @@ app.post('/api/staff', async (req, res) => {
             // Don't fail the request if admin creation fails
         }
         
-        // Log the action
-        logAudit('staff', 'Create Staff Member', newStaff.id, null, {
+        // Log the staff creation action
+        await logAudit('staff', 'Create', newStaff.id, null, {
             staff_name: newStaff.name,
             email: newStaff.email,
             role: newStaff.role,
             department: newStaff.department,
             status: newStaff.status
-        }, createdBy);
+        }, createdBy, clientIp);
         
         res.status(201).json({
             success: true,
