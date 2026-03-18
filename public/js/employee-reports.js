@@ -356,13 +356,18 @@ async function submitReport() {
 
         const data = await response.json();
 
+        if (!response.ok) {
+            showAlert('Error: ' + (data.error || 'Failed to submit report'), 'danger');
+            return;
+        }
+
         if (data.success) {
             showAlert(currentReportId ? 'Report updated successfully' : 'Report created successfully', 'success');
             reportModal.hide();
             loadReports(1);
             loadStatistics();
         } else {
-            showAlert('Error submitting report', 'danger');
+            showAlert('Error submitting report: ' + (data.error || 'Unknown error'), 'danger');
         }
     } catch (error) {
         console.error('Error:', error);

@@ -267,7 +267,10 @@ function renderPatients(patients) {
         patientCountEl.textContent = `${patients.length} patient${patients.length !== 1 ? 's' : ''} found`;
     }
 
-    if (patients.length === 0) {
+    // Filter out undefined/null patients
+    const validPatients = patients.filter(p => p && typeof p === 'object' && p.id);
+
+    if (validPatients.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="10" style="text-align: center; padding: 40px; color: #666;">
@@ -279,7 +282,7 @@ function renderPatients(patients) {
         return;
     }
 
-    patients.forEach(patient => {
+    validPatients.forEach(patient => {
         const row = createPatientRow(patient);
         tbody.appendChild(row);
     });

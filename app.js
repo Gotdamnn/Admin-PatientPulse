@@ -3233,7 +3233,7 @@ app.post('/api/employee-reports', async (req, res) => {
         );
 
         logAudit('employee_reports', 'Create', result.rows[0].report_id, null, result.rows[0]);
-        res.status(201).json({ success: true, data: result.rows[0] });
+        res.status(201).json({ success: true, message: 'Report created successfully', data: result.rows[0] });
     } catch (err) {
         console.error('Error creating report:', err);
         res.status(500).json({ success: false, error: err.message });
@@ -3267,7 +3267,7 @@ app.put('/api/employee-reports/:id', async (req, res) => {
                 await pool.query('UPDATE employee_reports SET closed_at = CURRENT_TIMESTAMP WHERE report_id = $1', [req.params.id]);
             }
             logAudit('employee_reports', 'Update', req.params.id, beforeState, result.rows[0]);
-            res.json({ success: true, data: result.rows[0] });
+            res.json({ success: true, message: 'Report updated successfully', message: 'Report updated successfully', data: result.rows[0] });
         } else {
             res.status(404).json({ success: false, error: 'Report not found' });
         }
@@ -3291,7 +3291,7 @@ app.put('/api/employee-reports/:id/resolve', async (req, res) => {
         );
 
         if (result.rows.length > 0) {
-            res.json({ success: true, data: result.rows[0] });
+            res.json({ success: true, message: 'Report resolved successfully', data: result.rows[0] });
         } else {
             res.status(404).json({ success: false, error: 'Report not found' });
         }
