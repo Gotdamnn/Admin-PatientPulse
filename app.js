@@ -3222,7 +3222,7 @@ app.post('/api/employee-reports', async (req, res) => {
 
         // Fetch employee details to ensure we have correct data
         const employeeCheck = await pool.query(
-            'SELECT employee_id, first_name, last_name, department_id, d.department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.department_id WHERE e.employee_id = $1',
+            'SELECT e.employee_id, e.first_name, e.last_name, e.department_id, d.department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.department_id WHERE e.employee_id = $1',
             [employee_id]
         );
 
