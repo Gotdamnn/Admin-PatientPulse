@@ -359,17 +359,31 @@ app.post('/api/auth/resend-otp', async (req, res) => {
         // Generate 6-digit OTP code
         const verificationOTP = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Store OTP in database
-        const insertQuery = `
-            INSERT INTO email_verification_tokens (email, token, created_at, expires_at)
-            VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
-            ON CONFLICT (email) DO UPDATE 
-            SET token = $2, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours'
-            RETURNING id, token, expires_at;
-        `;
+        // Check if email already has a record
+        const checkQuery = 'SELECT id FROM email_verification_tokens WHERE email = $1 LIMIT 1';
+        const checkResult = await pool.query(checkQuery, [email]);
         
-        const result = await pool.query(insertQuery, [email, verificationOTP]);
-        const tokenData = result.rows[0];
+        let tokenData;
+        if (checkResult.rows.length > 0) {
+            // Update existing record
+            const updateQuery = `
+                UPDATE email_verification_tokens 
+                SET token = $1, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours', is_verified = FALSE
+                WHERE email = $2
+                RETURNING id, token, expires_at;
+            `;
+            const updateResult = await pool.query(updateQuery, [verificationOTP, email]);
+            tokenData = updateResult.rows[0];
+        } else {
+            // Insert new record
+            const insertQuery = `
+                INSERT INTO email_verification_tokens (email, token, created_at, expires_at, is_verified)
+                VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours', FALSE)
+                RETURNING id, token, expires_at;
+            `;
+            const insertResult = await pool.query(insertQuery, [email, verificationOTP]);
+            tokenData = insertResult.rows[0];
+        }
         
         // Send verification email
         const emailResult = await sendVerificationEmail(email, userName || 'User', verificationOTP);
