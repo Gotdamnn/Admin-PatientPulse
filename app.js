@@ -8,6 +8,7 @@ const { runMigrations } = require('./database/init-db');
 const rbac = require('./src/rbac'); // Import RBAC module
 const { initializeEmailRoutes } = require('./src/email-verification-routes'); // Import email routes
 const { initializePasswordResetRoutes } = require('./src/password-reset-routes'); // Import password reset routes
+const { sendVerificationEmail } = require('./config/email-service'); // Import email service
 
 const app = express();
 app.use(express.json());
@@ -338,6 +339,64 @@ app.post('/api/auth/logout', async (req, res) => {
         res.json({ success: true, message: 'Logged out successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Resend OTP endpoint
+app.post('/api/auth/resend-otp', async (req, res) => {
+    const { email, userName } = req.body;
+    const clientIp = getClientIp(req);
+    
+    try {
+        // Validate input
+        if (!email) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Email is required' 
+            });
+        }
+        
+        // Generate 6-digit OTP code
+        const verificationOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Store OTP in database
+        const insertQuery = `
+            INSERT INTO email_verification_tokens (email, token, created_at, expires_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+            ON CONFLICT (email) DO UPDATE 
+            SET token = $2, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours'
+            RETURNING id, token, expires_at;
+        `;
+        
+        const result = await pool.query(insertQuery, [email, verificationOTP]);
+        const tokenData = result.rows[0];
+        
+        // Send verification email
+        const emailResult = await sendVerificationEmail(email, userName || 'User', verificationOTP);
+        
+        if (emailResult.success) {
+            await logAudit('email_verification', 'ResendOTP', null, null, { email, otpExpires: tokenData.expires_at }, 'System', clientIp);
+            res.status(200).json({
+                success: true,
+                message: 'OTP sent successfully',
+                data: {
+                    email: email,
+                    expiresAt: tokenData.expires_at
+                }
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to send OTP email',
+                details: emailResult.error
+            });
+        }
+    } catch (error) {
+        console.error('Error resending OTP:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
