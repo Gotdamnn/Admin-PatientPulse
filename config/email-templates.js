@@ -5,11 +5,11 @@
 
 const emailTemplates = {
     /**
-     * Email verification template
+     * Email verification template with OTP
      */
-    emailVerification: (userName, verificationLink) => {
+    emailVerification: (userName, verificationOTP) => {
         return {
-            subject: 'Verify Your PatientPulse Email Address',
+            subject: 'Your PatientPulse Email Verification Code',
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
                 <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -21,29 +21,29 @@ const emailTemplates = {
                     <h2 style="color: #2c3e50; margin-top: 0;">Hello ${userName},</h2>
                     
                     <p style="color: #34495e; line-height: 1.6;">
-                        Thank you for registering with PatientPulse. To complete your registration and verify your email address, please click the button below:
+                        Thank you for registering with PatientPulse. To verify your email address, use the verification code below:
                     </p>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="${verificationLink}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                            Verify Email Address
-                        </a>
+                        <div style="background-color: #ecf0f1; border: 2px solid #3498db; border-radius: 5px; padding: 20px; display: inline-block;">
+                            <p style="margin: 0; color: #7f8c8d; font-size: 12px; text-transform: uppercase; letter-spacing: 2px;">Verification Code</p>
+                            <p style="margin: 10px 0 0 0; font-size: 32px; font-weight: bold; color: #2c3e50; letter-spacing: 5px;">${verificationOTP}</p>
+                        </div>
                     </div>
                     
-                    <p style="color: #7f8c8d; font-size: 12px; text-align: center;">
-                        Or copy and paste this link in your browser:<br>
-                        <code style="background-color: #ecf0f1; padding: 5px 10px; border-radius: 3px; word-break: break-all;">${verificationLink}</code>
+                    <p style="color: #34495e; line-height: 1.6; text-align: center;">
+                        <strong>This code will expire in 24 hours.</strong>
                     </p>
                     
                     <p style="color: #34495e; line-height: 1.6;">
-                        This link will expire in 24 hours.
+                        Enter this code in the PatientPulse app or website to complete your email verification. Do not share this code with anyone.
                     </p>
                     
                     <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 30px 0;">
                     
                     <p style="color: #7f8c8d; font-size: 12px;">
                         If you did not create this account, please ignore this email.<br>
-                        <strong>Security Tip:</strong> Never share verification links or personal information via email.
+                        <strong>Security Tip:</strong> Never share your verification code with anyone.
                     </p>
                 </div>
             </div>
@@ -51,11 +51,11 @@ const emailTemplates = {
             text: `
 Hello ${userName},
 
-Thank you for registering with PatientPulse. To complete your registration, please visit this link:
+Thank you for registering with PatientPulse. Use this verification code to complete your registration:
 
-${verificationLink}
+Verification Code: ${verificationOTP}
 
-This link will expire in 24 hours.
+This code will expire in 24 hours.
 
 If you did not create this account, please ignore this email.
 

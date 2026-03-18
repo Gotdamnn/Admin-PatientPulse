@@ -15,15 +15,37 @@ app.use(express.json());
 // Configure CORS to allow requests from the client application
 app.use(cors({
     origin: function(origin, callback) {
-        // Allow all localhost/127.0.0.1 origins (for development Dart server on dynamic ports)
-        // and specific production origins
+        // Allow localhost origins for development
         if (!origin || 
             origin.startsWith('http://localhost:') || 
-            origin.startsWith('http://127.0.0.1:')) {
+            origin.startsWith('http://127.0.0.1:') ||
+            origin.startsWith('https://127.0.0.1:')) {
             callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
+            return;
         }
+        
+        // Allow configured CORS origin from environment
+        const allowedOrigin = process.env.CORS_ORIGIN;
+        if (allowedOrigin && origin === allowedOrigin) {
+            callback(null, true);
+            return;
+        }
+        
+        // Allow Azure-hosted origins (patientpulse.azurewebsites.net)
+        if (origin && origin.includes('azurewebsites.net')) {
+            callback(null, true);
+            return;
+        }
+        
+        // Allow same-origin requests (no origin header)
+        if (!origin) {
+            callback(null, true);
+            return;
+        }
+        
+        // Reject everything else
+        console.warn('❌ CORS rejected origin:', origin);
+        callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -950,7 +972,7 @@ app.put('/api/employees/:id', async (req, res) => {
              dept_id, job_title || null, employment_type || null, hire_date || null, employment_status || 'Active', req.params.id]
         );
         if (result.rows.length > 0) {
-            logAudit('employees', 'Update', req.params.id, beforeState, result.rows[0], email, clientIp);
+            await logAudit('employees', 'Update', req.params.id, beforeState, result.rows[0], email, clientIp);
             res.json(result.rows[0]);
         } else {
             res.status(404).json({ error: 'Employee not found' });
@@ -964,11 +986,12 @@ app.put('/api/employees/:id', async (req, res) => {
 // Delete employee
 app.delete('/api/employees/:id', async (req, res) => {
     try {
+        const clientIp = getClientIp(req);
         const beforeResult = await pool.query('SELECT * FROM employees WHERE employee_id = $1', [req.params.id]);
         const beforeState = beforeResult.rows[0];
         const result = await pool.query('DELETE FROM employees WHERE employee_id = $1 RETURNING *', [req.params.id]);
         if (result.rows.length > 0) {
-            logAudit('employees', 'Delete', req.params.id, beforeState, null);
+            await logAudit('employees', 'Delete', req.params.id, beforeState, null, 'Admin', clientIp);
             res.json({ success: true, message: 'Employee deleted' });
         } else {
             res.status(404).json({ error: 'Employee not found' });
@@ -1006,7 +1029,7 @@ app.post('/api/employees/:id/assign-role', async (req, res) => {
             staffRecord = updateResult.rows[0];
 
             // Log audit
-            logAudit('staff', 'Update', staffRecord.id, staffResult.rows[0], staffRecord, assignedBy);
+            await logAudit('staff', 'Update', staffRecord.id, staffResult.rows[0], staffRecord, assignedBy);
         } else {
             // Create new staff record
             const insertResult = await pool.query(
@@ -1018,7 +1041,7 @@ app.post('/api/employees/:id/assign-role', async (req, res) => {
             staffRecord = insertResult.rows[0];
 
             // Log audit
-            logAudit('staff', 'Create', staffRecord.id, null, staffRecord, assignedBy);
+            await logAudit('staff', 'Create', staffRecord.id, null, staffRecord, assignedBy);
         }
 
         res.json({
@@ -2155,11 +2178,12 @@ app.post('/api/staff/:id/permissions/grant', async (req, res) => {
             RETURNING *
         `, [staffResult.rows[0].id, permissionId, grantedBy]);
         
-        logAudit('staff_permissions', 'Grant Permission', staffResult.rows[0].id, null, {
+        const clientIpGrant = getClientIp(req);
+        await logAudit('staff_permissions', 'Grant Permission', staffResult.rows[0].id, null, {
             staff_name: staff.name,
             permission_id: permissionId,
             action: 'grant'
-        }, grantedBy);
+        }, grantedBy, clientIpGrant);
         
         res.json({
             success: true,
@@ -2218,11 +2242,12 @@ app.post('/api/staff/:id/permissions/revoke', async (req, res) => {
             RETURNING *
         `, [staffResult.rows[0].id, permissionId, revokedBy]);
         
-        logAudit('staff_permissions', 'Revoke Permission', staffResult.rows[0].id, null, {
+        const clientIpRevoke = getClientIp(req);
+        await logAudit('staff_permissions', 'Revoke Permission', staffResult.rows[0].id, null, {
             staff_name: staff.name,
             permission_id: permissionId,
             action: 'revoke'
-        }, revokedBy);
+        }, revokedBy, clientIpRevoke);
         
         res.json({
             success: true,
@@ -2274,10 +2299,11 @@ app.post('/api/staff/:id/permissions/reset', async (req, res) => {
         // Delete all permission overrides
         await pool.query('DELETE FROM staff_permissions WHERE staff_id = $1', [staffResult.rows[0].id]);
         
-        logAudit('staff_permissions', 'Reset Permissions', staffResult.rows[0].id, null, {
+        const clientIpReset = getClientIp(req);
+        await logAudit('staff_permissions', 'Reset Permissions', staffResult.rows[0].id, null, {
             staff_name: staff.name,
             action: 'reset_all'
-        }, resetBy);
+        }, resetBy, clientIpReset);
         
         res.json({
             success: true,

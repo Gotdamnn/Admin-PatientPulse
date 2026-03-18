@@ -8,7 +8,15 @@ const emailTemplates = require('./email-templates');
 const crypto = require('crypto');
 
 /**
- * Generate a secure verification token
+ * Generate a 6-digit OTP code
+ * @returns {string} - 6-digit OTP code (000000-999999)
+ */
+function generateVerificationOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+/**
+ * Generate a secure verification token (for password reset)
  * @returns {string} - Verification token
  */
 function generateVerificationToken() {
@@ -26,16 +34,15 @@ function generateVerificationLink(token) {
 }
 
 /**
- * Send verification email
+ * Send verification email with OTP code
  * @param {string} email - Recipient email address
  * @param {string} userName - User's name
- * @param {string} verificationToken - Verification token
+ * @param {string} verificationOTP - 6-digit OTP code
  * @returns {Promise} - Email send result
  */
-async function sendVerificationEmail(email, userName, verificationToken) {
+async function sendVerificationEmail(email, userName, verificationOTP) {
     try {
-        const verificationLink = generateVerificationLink(verificationToken);
-        const emailContent = emailTemplates.emailVerification(userName, verificationLink);
+        const emailContent = emailTemplates.emailVerification(userName, verificationOTP);
 
         const mailOptions = {
             from: `${process.env.SMTP_FROM_NAME} <${process.env.SMTP_FROM_EMAIL}>`,
@@ -167,6 +174,7 @@ async function sendCustomEmail(email, subject, html, text = '') {
 
 module.exports = {
     generateVerificationToken,
+    generateVerificationOTP,
     generateVerificationLink,
     sendVerificationEmail,
     sendPasswordResetEmail,

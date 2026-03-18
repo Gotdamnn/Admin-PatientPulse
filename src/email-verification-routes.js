@@ -10,7 +10,7 @@ const {
     sendVerificationEmail,
     sendPasswordResetEmail,
     sendWelcomeEmail,
-    generateVerificationToken
+    generateVerificationOTP
 } = require('../config/email-service');
 
 let pool;
@@ -49,10 +49,10 @@ router.post('/send-verification-email', async (req, res) => {
             });
         }
 
-        // Generate verification token
-        const verificationToken = generateVerificationToken();
+        // Generate 6-digit OTP code
+        const verificationOTP = generateVerificationOTP();
 
-        // Store token in database
+        // Store OTP in database
         const insertQuery = `
             INSERT INTO email_verification_tokens (email, token, created_at, expires_at)
             VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
@@ -61,19 +61,20 @@ router.post('/send-verification-email', async (req, res) => {
             RETURNING id, token, expires_at;
         `;
 
-        const result = await pool.query(insertQuery, [email, verificationToken]);
+        const result = await pool.query(insertQuery, [email, verificationOTP]);
         const tokenData = result.rows[0];
 
         // Send verification email
-        const emailResult = await sendVerificationEmail(email, userName, verificationToken);
+        const emailResult = await sendVerificationEmail(email, userName, verificationOTP);
 
         if (emailResult.success) {
             res.status(200).json({
                 success: true,
-                message: 'Verification email sent successfully',
+                message: 'Verification code sent successfully',
                 data: {
                     email: email,
-                    expiresAt: tokenData.expires_at
+                    expiresAt: tokenData.expires_at,
+                    codeLength: 6
                 }
             });
         } else {
@@ -94,59 +95,59 @@ router.post('/send-verification-email', async (req, res) => {
 });
 
 /**
- * GET /api/verify-email
- * Verify email with token
+ * POST /api/verify-email
+ * Verify email with OTP code
  */
-router.get('/verify-email', async (req, res) => {
+router.post('/verify-email', async (req, res) => {
     try {
-        const { token } = req.query;
+        const { email, code } = req.body;
 
-        // Validate token
-        if (!token) {
+        // Validate input
+        if (!email || !code) {
             return res.status(400).json({
                 success: false,
-                message: 'Verification token is required'
+                message: 'Email and verification code are required'
             });
         }
 
-        // Check token in database
+        // Check OTP in database
         const selectQuery = `
             SELECT * FROM email_verification_tokens 
-            WHERE token = $1 AND is_verified = FALSE;
+            WHERE email = $1 AND token = $2 AND is_verified = FALSE;
         `;
 
-        const result = await pool.query(selectQuery, [token]);
+        const result = await pool.query(selectQuery, [email, code]);
 
         if (result.rows.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid or expired verification token'
+                message: 'Invalid verification code'
             });
         }
 
         const tokenData = result.rows[0];
 
-        // Check if token has expired
+        // Check if code has expired
         if (new Date(tokenData.expires_at) < new Date()) {
             return res.status(400).json({
                 success: false,
-                message: 'Verification token has expired'
+                message: 'Verification code has expired. Please request a new one.'
             });
         }
 
-        // Mark token as verified
+        // Mark code as verified
         const updateQuery = `
             UPDATE email_verification_tokens 
             SET is_verified = TRUE, verified_at = CURRENT_TIMESTAMP 
-            WHERE token = $1
+            WHERE email = $1 AND token = $2
             RETURNING email, verified_at;
         `;
 
-        const updateResult = await pool.query(updateQuery, [token]);
+        const updateResult = await pool.query(updateQuery, [email, code]);
         const verifiedEmail = updateResult.rows[0];
 
         // Send welcome email
-        const userName = req.query.userName || 'User';
+        const userName = req.body.userName || 'User';
         await sendWelcomeEmail(verifiedEmail.email, userName);
 
         // Return success response
@@ -200,10 +201,10 @@ router.post('/resend-verification-email', async (req, res) => {
             });
         }
 
-        // Generate new token
-        const verificationToken = generateVerificationToken();
+        // Generate new OTP code
+        const verificationOTP = generateVerificationOTP();
 
-        // Update token in database
+        // Update OTP in database
         const updateQuery = `
             UPDATE email_verification_tokens 
             SET token = $1, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours'
@@ -211,20 +212,20 @@ router.post('/resend-verification-email', async (req, res) => {
             RETURNING token, expires_at;
         `;
 
-        const updateResult = await pool.query(updateQuery, [verificationToken, email]);
+        const updateResult = await pool.query(updateQuery, [verificationOTP, email]);
 
         if (updateResult.rows.length === 0) {
-            // Insert new token if not exists
+            // Insert new OTP if not exists
             const insertQuery = `
                 INSERT INTO email_verification_tokens (email, token, created_at, expires_at)
                 VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
                 RETURNING token, expires_at;
             `;
-            await pool.query(insertQuery, [email, verificationToken]);
+            await pool.query(insertQuery, [email, verificationOTP]);
         }
 
         // Send verification email
-        const emailResult = await sendVerificationEmail(email, userName, verificationToken);
+        const emailResult = await sendVerificationEmail(email, userName, verificationOTP);
 
         if (emailResult.success) {
             res.status(200).json({
