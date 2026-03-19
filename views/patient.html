@@ -252,8 +252,29 @@
                     </div>
                 </div>
             </div>
+            <div class="form-actions" style="padding: 0 20px 20px 20px; display: flex; gap: 12px;">
+                <button type="button" class="btn-save" onclick="showTemperatureHistoryModal()" style="flex: 1; background: #3b82f6;">View History</button>
+                <button type="button" class="btn-save" onclick="closeViewPatientModal()" style="flex: 1;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Temperature History Modal -->
+    <div id="temperatureHistoryModal" class="modal">
+        <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>Temperature History - <span id="tempHistoryPatientName">Patient Name</span></h2>
+                <button class="modal-close" onclick="closeTemperatureHistoryModal()">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div id="temperatureHistoryList" style="display: grid; gap: 12px;">
+                    <div style="text-align: center; color: #6b7280; padding: 20px;">
+                        Loading temperature history...
+                    </div>
+                </div>
+            </div>
             <div class="form-actions" style="padding: 0 20px 20px 20px;">
-                <button type="button" class="btn-save" onclick="closeViewPatientModal()" style="width: 100%;">Close</button>
+                <button type="button" class="btn-save" onclick="closeTemperatureHistoryModal()" style="width: 100%;">Close</button>
             </div>
         </div>
     </div>
