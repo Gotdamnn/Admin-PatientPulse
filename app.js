@@ -1767,6 +1767,26 @@ app.get('/api/patients/:id/temperature/latest', async (req, res) => {
     }
 });
 
+// Get temperature history for a patient (for View History modal)
+app.get('/api/patients/:id/temperature-history', async (req, res) => {
+    const patientId = req.params.id;
+    const limit = req.query.limit || 50; // Get last 50 records by default
+    
+    try {
+        const result = await pool.query(
+            `SELECT id, patient_id, temperature, recorded_at, notes, recorded_by 
+            FROM temperature_history 
+            WHERE patient_id = $1 
+            ORDER BY recorded_at DESC 
+            LIMIT $2`,
+            [patientId, limit]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ===== PATIENT REPORTS API (MOBILE & ADMIN SYNC) =====
 // Get all reports for a specific patient (MOBILE APP)
 app.get('/api/patients/:patientId/reports', async (req, res) => {

@@ -5,6 +5,7 @@ if (typeof API_BASE === 'undefined') {
 }
 let allPatients = [];
 let pendingDeletePatientId = null;
+let currentViewedPatient = null;
 
 // Show status modal instead of browser alert
 function showStatusModal(title, message, isSuccess = true) {
@@ -58,6 +59,8 @@ function showViewPatientModal(patient) {
     const modal = document.getElementById('viewPatientModal');
     if (!modal) return;
     
+    currentViewedPatient = patient;
+    
     const lastVisit = patient.last_visit ? new Date(patient.last_visit).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -89,6 +92,165 @@ function closeViewPatientModal() {
         modal.classList.remove('show');
         modal.style.display = 'none';
     }
+}
+
+// Show temperature history modal
+async function showTemperatureHistoryModal() {
+    if (!currentViewedPatient) return;
+    
+    const modal = document.getElementById('temperatureHistoryModal');
+    if (!modal) return;
+    
+    // Set patient name in modal header
+    const patientNameEl = document.getElementById('tempHistoryPatientName');
+    if (patientNameEl) {
+        patientNameEl.textContent = currentViewedPatient.name;
+    }
+    
+    // Load temperature history
+    await loadTemperatureHistory(currentViewedPatient.id);
+    
+    modal.classList.add('show');
+    modal.style.display = 'flex';
+}
+
+// Close temperature history modal
+function closeTemperatureHistoryModal() {
+    const modal = document.getElementById('temperatureHistoryModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
+}
+
+// Load temperature history from API or mock data
+async function loadTemperatureHistory(patientId) {
+    const historyList = document.getElementById('temperatureHistoryList');
+    if (!historyList) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/patients/${patientId}/temperature-history`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.length > 0) {
+                displayTemperatureHistory(data);
+            } else {
+                // No data found
+                historyList.innerHTML = `
+                    <div style="text-align: center; color: #6b7280; padding: 20px;">
+                        <i class="fas fa-info-circle" style="font-size: 24px; margin-bottom: 10px; display: block; color: #d1d5db;"></i>
+                        No temperature history available for this patient.
+                    </div>
+                `;
+            }
+        } else {
+            // API error - show message
+            historyList.innerHTML = `
+                <div style="text-align: center; color: #ef4444; padding: 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                    Failed to load temperature history.
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading temperature history:', error);
+        // Show error message instead of mock data
+        historyList.innerHTML = `
+            <div style="text-align: center; color: #ef4444; padding: 20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                Error loading temperature history. Please try again.
+            </div>
+        `;
+    }
+}
+
+// Display temperature history
+function displayTemperatureHistory(historyData) {
+    const historyList = document.getElementById('temperatureHistoryList');
+    if (!historyList) return;
+    
+    if (!historyData || (Array.isArray(historyData) && historyData.length === 0)) {
+        historyList.innerHTML = `
+            <div style="text-align: center; color: #6b7280; padding: 20px;">
+                No temperature history available for this patient.
+            </div>
+        `;
+        return;
+    }
+    
+    const records = Array.isArray(historyData) ? historyData : historyData.records || [];
+    
+    historyList.innerHTML = records.map(record => {
+        const date = new Date(record.date || record.recorded_at);
+        const formattedDate = date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const temp = parseFloat(record.temperature || record.body_temperature) || 0;
+        const tempColor = temp > 38 ? '#ef4444' : temp < 36 ? '#3b82f6' : '#10b981';
+        const tempStatus = temp > 38 ? 'Fever' : temp < 36 ? 'Low' : 'Normal';
+        
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid ${tempColor};">
+                <div>
+                    <div style="font-weight: 600; color: #1f2937;">${formattedDate}</div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">${record.notes || 'Regular measurement'}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.25rem; font-weight: 700; color: ${tempColor};">
+                        ${temp.toFixed(1)}°C
+                    </div>
+                    <div style="font-size: 0.75rem; color: #6b7280;">${tempStatus}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Display mock temperature history (for demonstration)
+function displayTemperatureMockHistory() {
+    const historyList = document.getElementById('temperatureHistoryList');
+    if (!historyList) return;
+    
+    const mockData = [
+        { date: new Date(Date.now() - 24*60*60*1000), temp: 37.2, status: 'Normal' },
+        { date: new Date(Date.now() - 48*60*60*1000), temp: 37.5, status: 'Normal' },
+        { date: new Date(Date.now() - 72*60*60*1000), temp: 36.8, status: 'Normal' },
+        { date: new Date(Date.now() - 96*60*60*1000), temp: 38.1, status: 'Fever' },
+        { date: new Date(Date.now() - 120*60*60*1000), temp: 38.4, status: 'Fever' }
+    ];
+    
+    historyList.innerHTML = mockData.map(record => {
+        const formattedDate = record.date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const tempColor = record.temp > 38 ? '#ef4444' : record.temp < 36 ? '#3b82f6' : '#10b981';
+        
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid ${tempColor};">
+                <div>
+                    <div style="font-weight: 600; color: #1f2937;">${formattedDate}</div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">Regular measurement</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.25rem; font-weight: 700; color: ${tempColor};">
+                        ${record.temp.toFixed(1)}°C
+                    </div>
+                    <div style="font-size: 0.75rem; color: #6b7280;">${record.status}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // Close status modal
