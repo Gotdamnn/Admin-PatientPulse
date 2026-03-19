@@ -109,7 +109,7 @@ async function loadFeedback() {
             
             return `
             <tr onclick="openFeedbackDetails(${feedbackId})">
-                <td>#${escapeHtml(String(feedbackId))}</td>
+                <td>${escapeHtml(String(feedbackId))}</td>
                 <td>
                     <span class="badge" style="${getTypeColor(feedbackType)}">
                         ${escapeHtml(feedbackType)}
@@ -119,8 +119,8 @@ async function loadFeedback() {
                 <td>${escapeHtml(email)}</td>
                 <td>
                     ${rating ? `
-                        <span class="stars" style="color: #ffc107; font-size: 14px;">
-                            ${Array(rating).fill('<i class="fas fa-star"></i>').join('')}${Array(5 - rating).fill('<i class="far fa-star"></i>').join('')}
+                        <span style="color: #ffc107; font-size: 14px;">
+                            ${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}
                         </span>
                     ` : '<span class="text-muted">-</span>'}
                 </td>
@@ -219,10 +219,8 @@ async function openFeedbackDetails(feedbackId) {
         const ratingContainer = document.getElementById('viewRating');
         if (feedback.app_rating) {
             ratingContainer.innerHTML = `
-                <div class="stars" style="font-size: 24px;">
-                    ${Array(5).fill(0).map((_, i) => 
-                        `<i class="fa${i < feedback.app_rating ? 's' : 'r'} fa-star"></i>`
-                    ).join('')}
+                <div style="font-size: 24px; color: #ffc107;">
+                    ${'★'.repeat(feedback.app_rating)}${'☆'.repeat(5 - feedback.app_rating)}
                 </div>
                 <small>${feedback.app_rating} / 5 Stars</small>
             `;
