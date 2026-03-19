@@ -71,6 +71,12 @@ async function loadFeedback() {
         
         const data = await response.json();
         console.log('📋 Feedback loaded:', data);
+        
+        // Debug: Log first feedback item to see actual field names
+        if (data.feedback && data.feedback.length > 0) {
+            console.log('🔍 First feedback item keys:', Object.keys(data.feedback[0]));
+            console.log('🔍 First feedback item:', data.feedback[0]);
+        }
 
         const tableBody = document.getElementById('feedbackTableBody');
         
