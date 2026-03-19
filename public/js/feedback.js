@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 loadFeedback();
+                loadStatistics();
             }, 300);
         });
     }
@@ -145,10 +146,22 @@ async function loadFeedback() {
     }
 }
 
-// Load statistics
+// Load statistics with current filters applied
 async function loadStatistics() {
     try {
-        const response = await fetch(`${API_BASE}/feedback-stats`);
+        const search = document.getElementById('searchInput')?.value || '';
+        const status = document.getElementById('statusFilter')?.value || '';
+        const type = document.getElementById('typeFilter')?.value || '';
+        const rating = document.getElementById('ratingFilter')?.value || '';
+
+        const params = new URLSearchParams({
+            search,
+            status,
+            type,
+            rating
+        });
+
+        const response = await fetch(`${API_BASE}/feedback-stats?${params}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -326,6 +339,7 @@ function showFeedbackForm() {
 function applyFilters() {
     console.log('🔍 Applying filters...');
     loadFeedback();
+    loadStatistics();
 }
 
 // Reset filters
@@ -336,6 +350,7 @@ function resetFilters() {
     document.getElementById('typeFilter').value = '';
     document.getElementById('ratingFilter').value = '';
     loadFeedback();
+    loadStatistics();
 }
 
 // Helper functions

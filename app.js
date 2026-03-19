@@ -3700,29 +3700,18 @@ app.delete('/api/feedback/:id', async (req, res) => {
     }
 });
 
-// Get feedback statistics
+// Get feedback statistics with optional filtering
 app.get('/api/feedback-stats', async (req, res) => {
     try {
-        const totalResult = await pool.query('SELECT COUNT(*) as count FROM feedback');
-        const openResult = await pool.query('SELECT COUNT(*) as count FROM feedback WHERE status = $1', ['Open']);
-        const resolvedResult = await pool.query('SELECT COUNT(*) as count FROM feedback WHERE status = $1', ['Resolved']);
-        const ratingResult = await pool.query('SELECT AVG(app_rating) as avg_rating FROM feedback WHERE app_rating IS NOT NULL');
+        const { search, status, type, rating } = req.query;
+        
+        let whereClause = 'WHERE 1=1';
+        const params = [];
+        let paramIndex = 1;
 
-        const stats = {
-            total: parseInt(totalResult.rows[0].count) || 0,
-            open: parseInt(openResult.rows[0].count) || 0,
-            resolved: parseInt(resolvedResult.rows[0].count) || 0,
-            avgRating: parseFloat(ratingResult.rows[0].avg_rating) || 0
-        };
-
-        console.log('📊 Feedback stats:', stats);
-
-        res.json({ success: true, stats });
-    } catch (err) {
-        console.error('❌ Error fetching feedback statistics:', err.message);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
+        // Apply filters
+        if (search) {
+            whereClause += ` AND (subject ILIKE $${paramIndex} OR message ILIKE $${paramIndex} OR user_email ILIKE $${paramIndex})`;\n            params.push(`%${search}%`);\n            paramIndex++;\n        }\n\n        if (status) {\n            whereClause += ` AND status = $${paramIndex}`;\n            params.push(status);\n            paramIndex++;\n        }\n\n        if (type) {\n            whereClause += ` AND feedback_type = $${paramIndex}`;\n            params.push(type);\n            paramIndex++;\n        }\n\n        if (rating) {\n            whereClause += ` AND app_rating = $${paramIndex}`;\n            params.push(parseInt(rating));\n            paramIndex++;\n        }\n\n        // Build queries with filters\n        const totalResult = await pool.query(`SELECT COUNT(*) as count FROM feedback ${whereClause}`, params);\n        const openResult = await pool.query(`SELECT COUNT(*) as count FROM feedback ${whereClause} AND status = 'Open'`, params);\n        const resolvedResult = await pool.query(`SELECT COUNT(*) as count FROM feedback ${whereClause} AND status = 'Resolved'`, params);\n        const ratingResult = await pool.query(`SELECT AVG(app_rating) as avg_rating FROM feedback ${whereClause} AND app_rating IS NOT NULL`, params);\n\n        const stats = {\n            total: parseInt(totalResult.rows[0].count) || 0,\n            open: parseInt(openResult.rows[0].count) || 0,\n            resolved: parseInt(resolvedResult.rows[0].count) || 0,\n            avgRating: parseFloat(ratingResult.rows[0].avg_rating) || 0\n        };\n\n        console.log('📊 Feedback stats:', stats);\n\n        res.json({ success: true, stats });\n    } catch (err) {\n        console.error('❌ Error fetching feedback statistics:', err.message);\n        res.status(500).json({ success: false, error: err.message });\n    }\n});
 
 // ===== DEBUG/TEST ENDPOINTS =====
 // Test endpoint to verify employee reports table exists and has data
