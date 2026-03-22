@@ -1164,7 +1164,8 @@ app.post('/api/employees', async (req, res) => {
     const { 
         first_name, middle_name, last_name, gender, date_of_birth,
         email, phone_number, address,
-        department_id, job_title, employment_type, hire_date, employment_status
+        department_id, job_title, employment_type, hire_date, employment_status,
+        password  // New: password field
     } = req.body;
     
     const clientIp = getClientIp(req);
@@ -1174,24 +1175,38 @@ app.post('/api/employees', async (req, res) => {
         if (!first_name || !last_name || !email) {
             return res.status(400).json({ error: 'first_name, last_name, and email are required' });
         }
+
+        // Validate password
+        if (!password || password.length < 6) {
+            return res.status(400).json({ error: 'Password is required and must be at least 6 characters' });
+        }
         
         // Ensure department_id is an integer or null
         const dept_id = department_id ? parseInt(department_id) : null;
+        
+        // Hash the password
+        let hashedPassword;
+        try {
+            hashedPassword = await bcrypt.hash(password, 10);
+        } catch (hashErr) {
+            console.error('Password hashing error:', hashErr);
+            return res.status(500).json({ error: 'Failed to process password' });
+        }
         
         const result = await pool.query(
             `INSERT INTO employees (
                 first_name, middle_name, last_name, gender, date_of_birth,
                 email, phone_number, address,
-                department_id, job_title, employment_type, hire_date, employment_status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+                department_id, job_title, employment_type, hire_date, employment_status, password
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
             [first_name, middle_name || null, last_name, gender || null, date_of_birth || null,
              email, phone_number || null, address || null,
-             dept_id, job_title || null, employment_type || null, hire_date || null, employment_status || 'Active']
+             dept_id, job_title || null, employment_type || null, hire_date || null, employment_status || 'Active', hashedPassword]
         );
         await logAudit('employees', 'Create', result.rows[0].employee_id, null, result.rows[0], email, clientIp);
         res.status(201).json({
             success: true,
-            message: 'Employee created successfully',
+            message: 'Employee created successfully with password',
             data: result.rows[0]
         });
     } catch (err) {

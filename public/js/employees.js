@@ -124,7 +124,36 @@ function setupEventListeners() {
         editForm.addEventListener('submit', saveEmployeeChanges);
     }
 
-    // Generate password button
+    // Generate password button for Add Modal
+    const generateAddPasswordBtn = document.getElementById('generateAddPasswordBtn');
+    if (generateAddPasswordBtn) {
+        generateAddPasswordBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const newPassword = generateRandomPassword();
+            document.getElementById('addPassword').value = newPassword;
+            document.getElementById('addPasswordConfirm').value = newPassword;
+            
+            // Show notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #22c55e;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 6px;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = 'Password generated: ' + newPassword;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.remove(), 3000);
+        });
+    }
+
+    // Generate password button for Edit Modal
     setupGeneratePasswordButton();
 
     // Modal close buttons
@@ -415,6 +444,12 @@ function openAddEmployeeModal() {
     if (hireDateInput) {
         hireDateInput.value = new Date().toISOString().split('T')[0];
     }
+
+    // Clear password fields
+    const passwordInput = document.getElementById('addPassword');
+    const passwordConfirmInput = document.getElementById('addPasswordConfirm');
+    if (passwordInput) passwordInput.value = '';
+    if (passwordConfirmInput) passwordConfirmInput.value = '';
     
     if (modal) modal.classList.add('show');
 }
@@ -422,6 +457,9 @@ function openAddEmployeeModal() {
 // Add new employee
 async function addNewEmployee(e) {
     e.preventDefault();
+
+    const password = document.getElementById('addPassword').value.trim();
+    const passwordConfirm = document.getElementById('addPasswordConfirm').value.trim();
 
     const employeeData = {
         first_name: document.getElementById('addFirstName').value.trim(),
@@ -436,7 +474,8 @@ async function addNewEmployee(e) {
         job_title: document.getElementById('addJobTitle').value || null,
         employment_type: document.getElementById('addEmploymentType').value || null,
         hire_date: document.getElementById('addHireDate').value || null,
-        employment_status: document.getElementById('addEmploymentStatus').value || 'Active'
+        employment_status: document.getElementById('addEmploymentStatus').value || 'Active',
+        password: password
     };
 
     // Validate required fields
@@ -449,6 +488,22 @@ async function addNewEmployee(e) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(employeeData.email)) {
         showStatusModal('Error', 'Please enter a valid email address.', 'error');
+        return;
+    }
+
+    // Validate password
+    if (!password) {
+        showStatusModal('Error', 'Password is required for new employees.', 'error');
+        return;
+    }
+
+    if (password.length < 6) {
+        showStatusModal('Error', 'Password must be at least 6 characters.', 'error');
+        return;
+    }
+
+    if (password !== passwordConfirm) {
+        showStatusModal('Error', 'Passwords do not match.', 'error');
         return;
     }
 
@@ -474,7 +529,7 @@ async function addNewEmployee(e) {
 
         const newEmployee = await response.json();
         closeModal('addEmployeeModal');
-        showStatusModal('Success', `Employee "${employeeData.first_name} ${employeeData.last_name}" has been added successfully!`, 'success');
+        showStatusModal('Success', `Employee "${employeeData.first_name} ${employeeData.last_name}" has been added successfully with password!`, 'success');
         loadEmployees();
     } catch (error) {
         console.error('Error adding employee:', error);
