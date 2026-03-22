@@ -738,13 +738,20 @@ app.post('/api/patients', async (req, res) => {
         
         const patient = result.rows[0];
         
-        // If temperature is provided, also record it in patient_vitals
+        // If temperature is provided, also record it in patient_vitals and temperature_history
         if (body_temperature) {
             const temperatureStatus = classifyTemperature(body_temperature);
             
             await pool.query(
                 `INSERT INTO patient_vitals (patient_id, body_temperature, temperature_status, notes, recorded_by) 
                 VALUES ($1, $2, $3, $4, 'Mobile Registration') RETURNING id`,
+                [patient.id, body_temperature, temperatureStatus, `Initial temperature recorded during registration`]
+            );
+            
+            // Also record in temperature_history
+            await pool.query(
+                `INSERT INTO temperature_history (patient_id, temperature, temperature_status, notes, recorded_by) 
+                VALUES ($1, $2, $3, $4, 'Mobile Registration')`,
                 [patient.id, body_temperature, temperatureStatus, `Initial temperature recorded during registration`]
             );
             
@@ -792,13 +799,20 @@ app.put('/api/patients/:id', async (req, res) => {
             [name, status, body_temperature, last_visit, email, age || null, gender || null, req.params.id]
         );
         
-        // If temperature was updated, also record it in patient_vitals
+        // If temperature was updated, also record it in patient_vitals and temperature_history
         if (body_temperature !== null && body_temperature !== undefined && body_temperature !== beforeState.body_temperature) {
             const temperatureStatus = classifyTemperature(body_temperature);
             
             await pool.query(
                 `INSERT INTO patient_vitals (patient_id, body_temperature, temperature_status, recorded_by, notes) 
                 VALUES ($1, $2, $3, 'System', 'Temperature update via patient profile')`,
+                [req.params.id, body_temperature, temperatureStatus]
+            );
+            
+            // Also record in temperature_history
+            await pool.query(
+                `INSERT INTO temperature_history (patient_id, temperature, temperature_status, notes, recorded_by) 
+                VALUES ($1, $2, $3, 'Temperature update via patient profile', 'System')`,
                 [req.params.id, body_temperature, temperatureStatus]
             );
             
@@ -872,6 +886,15 @@ app.post('/api/patient-vitals', async (req, res) => {
         );
         
         const vitals = result.rows[0];
+        
+        // Also record in temperature_history if temperature is provided
+        if (body_temperature) {
+            await pool.query(
+                `INSERT INTO temperature_history (patient_id, temperature, temperature_status, notes, recorded_by) 
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [patient_id, body_temperature, temperatureStatus, notes || null, recorded_by || 'Mobile']
+            );
+        }
         
         // Create alert if temperature is abnormal
         if (temperatureStatus && temperatureStatus !== 'Normal') {
@@ -2082,17 +2105,26 @@ app.get('/api/patients/:id/temperature-history', async (req, res) => {
     const limit = req.query.limit || 50; // Get last 50 records by default
     
     try {
+        // Validate patient exists
+        const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patientId]);
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+        
+        // Get temperature history
         const result = await pool.query(
-            `SELECT id, patient_id, temperature, recorded_at, notes, recorded_by 
+            `SELECT id, patient_id, temperature as body_temperature, temperature_status, recorded_at, notes, recorded_by 
             FROM temperature_history 
             WHERE patient_id = $1 
             ORDER BY recorded_at DESC 
             LIMIT $2`,
             [patientId, limit]
         );
+        
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Error fetching temperature history:', err.message);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

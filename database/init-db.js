@@ -345,7 +345,7 @@ async function ensurePatientVitalsTable() {
                 patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
                 device_id VARCHAR(100),
                 body_temperature DECIMAL(5, 2),
-                temperature_status VARCHAR(50) CHECK (temperature_status IN ('Normal', 'Warning', 'Fever')) DEFAULT NULL,
+                temperature_status VARCHAR(50) CHECK (temperature_status IN ('Low', 'Normal', 'Warning', 'Fever')) DEFAULT NULL,
                 notes TEXT,
                 recorded_by VARCHAR(255) DEFAULT 'System',
                 recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -369,6 +369,40 @@ async function ensurePatientVitalsTable() {
     }
 }
 
+// Ensure temperature history table exists
+async function ensureTemperatureHistoryTable() {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS temperature_history (
+                id SERIAL PRIMARY KEY,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                temperature DECIMAL(5, 2) NOT NULL,
+                temperature_status VARCHAR(50) CHECK (temperature_status IN ('Low', 'Normal', 'Warning', 'Fever')) DEFAULT NULL,
+                notes TEXT,
+                recorded_by VARCHAR(255) DEFAULT 'System',
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            -- Create indexes for faster queries
+            CREATE INDEX IF NOT EXISTS idx_temp_history_patient_id ON temperature_history(patient_id);
+            CREATE INDEX IF NOT EXISTS idx_temp_history_recorded_at ON temperature_history(recorded_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_temp_history_status ON temperature_history(temperature_status);
+        `);
+        
+        const result = await client.query('SELECT COUNT(*) as count FROM temperature_history');
+        const count = result.rows[0].count;
+        console.log(`✅ Temperature history table ensured with ${count} records`);
+    } catch (err) {
+        if (!err.message.includes('already exists')) {
+            console.error('⚠️  Error ensuring temperature history table:', err.message);
+        }
+    } finally {
+        client.release();
+    }
+}
+
 // Run all migrations
 async function runMigrations() {
     console.log('\n🔧 Starting database migrations...\n');
@@ -379,6 +413,7 @@ async function runMigrations() {
         await ensurePermissionsTable();
         await ensureStaffPermissionsTable();
         await ensurePatientVitalsTable();
+        await ensureTemperatureHistoryTable();
         await ensureNotificationsTable();
         await ensureEmailVerificationTable();
         await ensurePasswordResetTokensTable();
