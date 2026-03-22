@@ -345,6 +345,7 @@ async function ensurePatientVitalsTable() {
                 patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
                 device_id VARCHAR(100),
                 body_temperature DECIMAL(5, 2),
+                temperature_status VARCHAR(50) CHECK (temperature_status IN ('Normal', 'Warning', 'Fever')) DEFAULT NULL,
                 notes TEXT,
                 recorded_by VARCHAR(255) DEFAULT 'System',
                 recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

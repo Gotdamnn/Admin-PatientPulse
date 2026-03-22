@@ -158,6 +158,42 @@ async function logAudit(tableName, action, targetId, beforeState = null, afterSt
     }
 }
 
+// ===== TEMPERATURE CLASSIFICATION HELPER =====
+function classifyTemperature(bodyTemperature) {
+    if (bodyTemperature === null || bodyTemperature === undefined) return null;
+    
+    const temp = parseFloat(bodyTemperature);
+    if (isNaN(temp)) return null;
+    
+    if (temp < 36.5) return 'Low';
+    if (temp >= 36.5 && temp <= 37.5) return 'Normal';
+    if (temp >= 37.6 && temp <= 38.4) return 'Warning';
+    if (temp >= 38.5) return 'Fever';
+    
+    return null;
+}
+
+// ===== ALERT GENERATION HELPER =====
+async function createTemperatureAlert(patientId, temperature, temperatureStatus, recordedBy = 'System') {
+    try {
+        // Only create alerts for abnormal temperatures
+        if (temperatureStatus === 'Normal' || temperatureStatus === 'Low') return;
+        
+        const severity = temperatureStatus === 'Fever' ? 'Critical' : 'Warning';
+        const message = temperatureStatus === 'Fever' 
+            ? `Fever detected: ${temperature}°C` 
+            : `Elevated temperature: ${temperature}°C`;
+        
+        await pool.query(
+            `INSERT INTO alerts (patient_id, alert_type, message, severity, status, created_by) 
+             VALUES ($1, $2, $3, $4, 'Active', $5)`,
+            [patientId, 'Temperature', message, severity, recordedBy]
+        );
+    } catch (err) {
+        console.error('❌ Error creating temperature alert:', err.message);
+    }
+}
+
 // ===== PERMISSION ENFORCEMENT SYSTEM =====
 // Global role permissions
 const rolePermissions = {
@@ -704,11 +740,18 @@ app.post('/api/patients', async (req, res) => {
         
         // If temperature is provided, also record it in patient_vitals
         if (body_temperature) {
+            const temperatureStatus = classifyTemperature(body_temperature);
+            
             await pool.query(
-                `INSERT INTO patient_vitals (patient_id, body_temperature, notes, recorded_by) 
-                VALUES ($1, $2, $3, 'Mobile Registration') RETURNING id`,
-                [patient.id, body_temperature, `Initial temperature recorded during registration`]
+                `INSERT INTO patient_vitals (patient_id, body_temperature, temperature_status, notes, recorded_by) 
+                VALUES ($1, $2, $3, $4, 'Mobile Registration') RETURNING id`,
+                [patient.id, body_temperature, temperatureStatus, `Initial temperature recorded during registration`]
             );
+            
+            // Create alert if temperature is abnormal
+            if (temperatureStatus && temperatureStatus !== 'Normal') {
+                await createTemperatureAlert(patient.id, body_temperature, temperatureStatus, 'Mobile Registration');
+            }
         }
         
         await logAudit('patients', 'Create', patient.id, null, patient, email, clientIp);
@@ -751,11 +794,18 @@ app.put('/api/patients/:id', async (req, res) => {
         
         // If temperature was updated, also record it in patient_vitals
         if (body_temperature !== null && body_temperature !== undefined && body_temperature !== beforeState.body_temperature) {
+            const temperatureStatus = classifyTemperature(body_temperature);
+            
             await pool.query(
-                `INSERT INTO patient_vitals (patient_id, body_temperature, recorded_by, notes) 
-                VALUES ($1, $2, 'System', 'Temperature update via patient profile')`,
-                [req.params.id, body_temperature]
+                `INSERT INTO patient_vitals (patient_id, body_temperature, temperature_status, recorded_by, notes) 
+                VALUES ($1, $2, $3, 'System', 'Temperature update via patient profile')`,
+                [req.params.id, body_temperature, temperatureStatus]
             );
+            
+            // Create alert if temperature is abnormal
+            if (temperatureStatus && temperatureStatus !== 'Normal') {
+                await createTemperatureAlert(req.params.id, body_temperature, temperatureStatus, 'System');
+            }
         }
         
         // Fetch the updated patient with latest_temperature from patient_vitals (same as GET endpoint)
@@ -794,6 +844,105 @@ app.delete('/api/patients/:id', async (req, res) => {
         }
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ===== PATIENT VITALS API =====
+// Record patient vital signs with automatic temperature classification
+app.post('/api/patient-vitals', async (req, res) => {
+    const { patient_id, body_temperature, blood_pressure, heart_rate, blood_glucose, oxygen_saturation, notes, recorded_by } = req.body;
+    const clientIp = getClientIp(req);
+    
+    try {
+        // Validate patient exists
+        const patientCheck = await pool.query('SELECT id FROM patients WHERE id = $1', [patient_id]);
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+        
+        // Classify temperature if provided
+        const temperatureStatus = body_temperature ? classifyTemperature(body_temperature) : null;
+        
+        // Insert vital record
+        const result = await pool.query(
+            `INSERT INTO patient_vitals (patient_id, body_temperature, temperature_status, blood_pressure, heart_rate, blood_glucose, oxygen_saturation, notes, recorded_by) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+             RETURNING *`,
+            [patient_id, body_temperature || null, temperatureStatus, blood_pressure || null, heart_rate || null, blood_glucose || null, oxygen_saturation || null, notes || null, recorded_by || 'Mobile']
+        );
+        
+        const vitals = result.rows[0];
+        
+        // Create alert if temperature is abnormal
+        if (temperatureStatus && temperatureStatus !== 'Normal') {
+            await createTemperatureAlert(patient_id, body_temperature, temperatureStatus, recorded_by || 'Mobile');
+        }
+        
+        // Log the action
+        await logAudit('patient_vitals', 'Create', vitals.id, null, vitals, recorded_by || 'Mobile', clientIp);
+        
+        res.status(201).json({
+            success: true,
+            message: 'Vital signs recorded successfully',
+            data: {
+                id: vitals.id,
+                patient_id: vitals.patient_id,
+                body_temperature: vitals.body_temperature,
+                temperature_status: vitals.temperature_status,
+                blood_pressure: vitals.blood_pressure,
+                heart_rate: vitals.heart_rate,
+                blood_glucose: vitals.blood_glucose,
+                oxygen_saturation: vitals.oxygen_saturation,
+                recorded_at: vitals.recorded_at,
+                notes: vitals.notes
+            }
+        });
+    } catch (err) {
+        console.error('❌ Error recording patient vitals:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get patient vitals
+app.get('/api/patient-vitals/:patient_id', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM patient_vitals 
+             WHERE patient_id = $1 
+             ORDER BY recorded_at DESC 
+             LIMIT 50`,
+            [req.params.patient_id]
+        );
+        res.json({
+            success: true,
+            data: result.rows
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get latest patient vital
+app.get('/api/patient-vitals/:patient_id/latest', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM patient_vitals 
+             WHERE patient_id = $1 
+             ORDER BY recorded_at DESC 
+             LIMIT 1`,
+            [req.params.patient_id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.json({ success: true, data: null });
+        }
+        
+        res.json({
+            success: true,
+            data: result.rows[0]
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
