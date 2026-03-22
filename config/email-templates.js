@@ -118,10 +118,11 @@ Security Tips:
     /**
      * Password reset template
      * Modern hospital design with blue and white color scheme
+     * Uses verification code instead of reset link
      */
-    passwordReset: (userName, resetLink) => {
+    passwordReset: (userName, resetCode) => {
         return {
-            subject: 'Reset Your PatientPulse Password',
+            subject: 'Your PatientPulse Password Reset Code',
             html: `
             <html>
             <head>
@@ -137,11 +138,11 @@ Security Tips:
                         
                         <!-- Lock Icon -->
                         <div style="width: 70px; height: 70px; background: rgba(255,255,255,0.95); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #0078D4;">
-                            🔐
+                            🔑
                         </div>
                         
                         <h1 style="color: #ffffff; margin: 0 0 8px 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">PatientPulse</h1>
-                        <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Password Reset</p>
+                        <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Password Reset Code</p>
                     </div>
                     
                     <!-- Main Content Card -->
@@ -152,34 +153,28 @@ Security Tips:
                         </p>
                         
                         <p style="color: #4B5563; margin: 0 0 30px 0; font-size: 15px; line-height: 1.6;">
-                            We received a request to reset your password. For your security, this link will expire in <strong>1 hour</strong>. Click the button below to create a new password immediately.
+                            We received a request to reset your password. Use the verification code below to create a new password and secure your account.
                         </p>
                         
-                        <!-- Reset Button -->
-                        <div style="text-align: center; margin: 35px 0;">
-                            <a href="${resetLink}" style="background: linear-gradient(135deg, #0078D4 0%, #0066CC 100%); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; font-size: 16px; box-shadow: 0 4px 12px rgba(0,120,212,0.3); transition: transform 0.2s;">
-                                Reset Password
-                            </a>
+                        <!-- Reset Code Box -->
+                        <div style="background: linear-gradient(135deg, #F0F6FF 0%, #E8F2FF 100%); border: 2px solid #0078D4; border-radius: 12px; padding: 30px; margin: 30px 0; text-align: center;">
+                            <p style="color: #0078D4; margin: 0 0 12px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Your Password Reset Code</p>
+                            <p style="margin: 0; font-size: 52px; font-weight: 800; color: #0066CC; letter-spacing: 4px; font-family: 'Courier New', monospace;">
+                                ${resetCode}
+                            </p>
+                            <p style="color: #6B7280; margin: 15px 0 0 0; font-size: 13px;">Never share this code with anyone</p>
                         </div>
                         
-                        <p style="color: #6B7280; text-align: center; margin: 25px 0; font-size: 13px;">
-                            If the button above doesn't work, copy and paste this link into your browser:
+                        <!-- Info Box -->
+                        <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; border-radius: 8px; margin: 25px 0;">
+                            <p style="color: #92400E; margin: 0; font-size: 14px; font-weight: 600;">
+                                ⏱️ Code Expires In: <strong>5 Minutes</strong>
+                            </p>
+                        </div>
+                        
+                        <p style="color: #4B5563; margin: 25px 0; font-size: 15px; line-height: 1.6;">
+                            Enter this code in the PatientPulse app to reset your password. For your security, this code will expire in 5 minutes.
                         </p>
-                        <div style="background: #F3F4F6; border-radius: 8px; padding: 12px; margin: 20px 0; word-break: break-all;">
-                            <p style="color: #0078D4; margin: 0; font-size: 12px; font-family: 'Courier New', monospace; line-height: 1.6;">
-                                ${resetLink}
-                            </p>
-                        </div>
-                        
-                        <!-- Important Security Box -->
-                        <div style="background: linear-gradient(135deg, #FEF3C7 0%, #FEF08A 100%); border-left: 4px solid #F59E0B; padding: 16px; border-radius: 8px; margin: 25px 0;">
-                            <p style="color: #92400E; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5;">
-                                ⚠️ <strong>Link Expires In:</strong> 1 Hour
-                            </p>
-                            <p style="color: #92400E; margin: 8px 0 0 0; font-size: 13px;">
-                                Act quickly to secure your account
-                            </p>
-                        </div>
                         
                         <!-- If Not Requested -->
                         <div style="background: #FEE2E2; border-left: 4px solid #EF4444; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -197,10 +192,10 @@ Security Tips:
                                 🔒 Security Tips
                             </p>
                             <ul style="color: #6B7280; margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
-                                <li style="margin-bottom: 4px;">Never share your reset link with anyone</li>
-                                <li style="margin-bottom: 4px;">PatientPulse staff will never ask for your password</li>
-                                <li style="margin-bottom: 4px;">Always access PatientPulse through the official website</li>
-                                <li>Use a strong, unique password for your account</li>
+                                <li style="margin-bottom: 4px;">Never share your reset code with anyone</li>
+                                <li style="margin-bottom: 4px;">PatientPulse staff will never ask for your code</li>
+                                <li style="margin-bottom: 4px;">Always use strong, unique passwords</li>
+                                <li>Report suspicious activity immediately</li>
                             </ul>
                         </div>
                         
@@ -222,19 +217,19 @@ Security Tips:
             text: `
 Hello ${userName},
 
-We received a request to reset your password. Please visit this link to create a new password:
+We received a request to reset your password. Use this code to create a new password:
 
-${resetLink}
+Password Reset Code: ${resetCode}
 
-This link will expire in 1 hour.
+This code will expire in 5 minutes. Enter this code in the PatientPulse app to reset your password.
 
 If you did not request a password reset and are concerned about your account security, please contact support immediately.
 
 Important Security Reminders:
-- Never share your reset link with anyone
-- PatientPulse staff will never ask for your password
+- Never share your reset code with anyone
+- PatientPulse staff will never ask for your code
 - Always use strong, unique passwords
-- Only access PatientPulse through official channels
+- Report suspicious activity immediately
 
 ---
 © 2024 PatientPulse. All rights reserved.

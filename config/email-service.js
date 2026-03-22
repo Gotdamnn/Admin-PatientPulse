@@ -72,13 +72,14 @@ async function sendVerificationEmail(email, userName, verificationOTP) {
  * Send password reset email
  * @param {string} email - Recipient email address
  * @param {string} userName - User's name
- * @param {string} resetToken - Reset token
+ * @param {string} resetToken - Reset token (can be password reset code)
  * @returns {Promise} - Email send result
  */
 async function sendPasswordResetEmail(email, userName, resetToken) {
     try {
-        const resetLink = `${process.env.APP_URL || 'http://localhost:3001'}/reset-password?token=${resetToken}`;
-        const emailContent = emailTemplates.passwordReset(userName, resetLink);
+        // Use the reset token as reset code (6-digit OTP format)
+        const resetCode = resetToken.toString();
+        const emailContent = emailTemplates.passwordReset(userName, resetCode);
 
         const mailOptions = {
             from: `${process.env.SMTP_FROM_NAME} <${process.env.SMTP_FROM_EMAIL}>`,

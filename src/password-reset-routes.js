@@ -67,9 +67,9 @@ router.post('/forgot-password', async (req, res) => {
         // Store reset token in database
         const insertQuery = `
             INSERT INTO password_reset_tokens (user_id, email, token, created_at, expires_at)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 hour')
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '5 minutes')
             ON CONFLICT (user_id) DO UPDATE 
-            SET token = $3, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '1 hour'
+            SET token = $3, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '5 minutes'
             RETURNING id, expires_at;
         `;
 

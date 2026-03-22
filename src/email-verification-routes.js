@@ -55,9 +55,9 @@ router.post('/send-verification-email', async (req, res) => {
         // Store OTP in database
         const insertQuery = `
             INSERT INTO email_verification_tokens (email, token, created_at, expires_at)
-            VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+            VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '5 minutes')
             ON CONFLICT (email) DO UPDATE 
-            SET token = $2, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '24 hours'
+            SET token = $2, created_at = CURRENT_TIMESTAMP, expires_at = CURRENT_TIMESTAMP + INTERVAL '5 minutes'
             RETURNING id, token, expires_at;
         `;
 
