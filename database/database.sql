@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     admin_id INTEGER,
     admin_name VARCHAR(255) NOT NULL,
-    action VARCHAR(50) CHECK (action IN ('Create', 'Update', 'Delete', 'Login', 'Logout', 'View', 'Export')) NOT NULL,
+    action VARCHAR(50) CHECK (action IN ('Create', 'Update', 'Delete', 'Login', 'LoginFailed', 'Logout', 'View', 'Export')) NOT NULL,
     table_name VARCHAR(100) NOT NULL,
     target_id INTEGER,
     ip_address VARCHAR(45),
@@ -772,3 +772,16 @@ FROM employees
 WHERE employment_status = 'Active' AND password IS NOT NULL;
 
 GRANT SELECT ON employee_login_view TO postgres;
+
+-- Migration: Update audit_logs table to allow LoginFailed action
+-- This allows login failure events to be recorded in audit logs
+
+-- Drop the existing constraint
+ALTER TABLE audit_logs DROP CONSTRAINT IF EXISTS audit_logs_action_check;
+
+-- Add the updated constraint with LoginFailed included
+ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_action_check 
+  CHECK (action IN ('Create', 'Update', 'Delete', 'Login', 'LoginFailed', 'Logout', 'View', 'Export'));
+
+-- Verify the constraint was added
+-- SELECT constraint_name, constraint_definition FROM information_schema.table_constraints WHERE table_name='audit_logs';
