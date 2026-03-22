@@ -1,7 +1,5 @@
 // Employee Reports & Complaints Management
 
-const API_BASE = window.location.origin + '/api';
-
 let currentPage = 1;
 let currentLimit = 10;
 let reportModal = null;
@@ -68,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         console.log('📊 Starting to load initial data...');
         loadReports();
-        loadStatistics();
+        // loadStatistics(); // Statistics section removed
         loadEmployeesDropdown();
         loadDepartmentsDropdown();
     }, 100);
@@ -189,7 +187,8 @@ function displayPagination(pagination) {
     container.innerHTML = html;
 }
 
-// Load statistics
+// Load statistics (DISABLED - statistics section removed)
+/*
 async function loadStatistics() {
     try {
         const response = await fetch(`${API_BASE}/employee-reports-stats/summary`);
@@ -212,6 +211,7 @@ async function loadStatistics() {
         console.error('❌ Error loading statistics:', error);
     }
 }
+*/
 
 // Load employees for dropdown
 async function loadEmployeesDropdown() {
@@ -460,7 +460,7 @@ async function submitReport() {
             reportModal.hide();
         }
         loadReports(1);
-        loadStatistics();
+        // loadStatistics(); // Statistics section removed
 
     } catch (error) {
         console.error('❌ Error:', error.message);
@@ -675,7 +675,7 @@ async function resolveReport() {
                 resolutionModal.remove();
                 detailsModal.hide();
                 loadReports(currentPage);
-                loadStatistics();
+                // loadStatistics(); // Statistics section removed
             }
         } catch (error) {
             console.error('Error:', error);
@@ -699,7 +699,7 @@ async function deleteReport(reportId) {
                 if (data.success) {
                     showAlert('Report deleted successfully', 'success');
                     loadReports(currentPage);
-                    loadStatistics();
+                    // loadStatistics(); // Statistics section removed
                 }
             } catch (error) {
                 console.error('Error:', error);

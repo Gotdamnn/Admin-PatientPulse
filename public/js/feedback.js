@@ -1,7 +1,5 @@
 // User Feedback Management
 
-const API_BASE = window.location.origin + '/api';
-
 let feedbackModal = null;
 let deleteModal = null;
 let feedbackFormModal = null;
@@ -35,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 loadFeedback();
-                loadStatistics();
+                // loadStatistics(); // Statistics section removed
             }, 300);
         });
     }
@@ -44,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         console.log('📊 Starting to load initial data...');
         loadFeedback();
-        loadStatistics();
+        // loadStatistics(); // Statistics section removed
     }, 100);
 });
 
@@ -146,7 +144,8 @@ async function loadFeedback() {
     }
 }
 
-// Load statistics with current filters applied
+// Load statistics with current filters applied (DISABLED - statistics section removed)
+/*
 async function loadStatistics() {
     try {
         const search = document.getElementById('searchInput')?.value || '';
@@ -181,6 +180,7 @@ async function loadStatistics() {
         console.error('❌ Error loading statistics:', error);
     }
 }
+*/
 
 // Open feedback details modal
 async function openFeedbackDetails(feedbackId) {
@@ -275,7 +275,7 @@ async function saveFeedback() {
             showAlert('Feedback updated successfully', 'success');
             feedbackModal.hide();
             loadFeedback();
-            loadStatistics();
+            // loadStatistics(); // Statistics section removed
         } else {
             showAlert(data.error || 'Error saving feedback', 'danger');
         }
@@ -316,7 +316,7 @@ async function deleteFeedback() {
             showAlert('Feedback deleted successfully', 'success');
             deleteModal.hide();
             loadFeedback();
-            loadStatistics();
+            // loadStatistics(); // Statistics section removed
         } else {
             showAlert(data.error || 'Error deleting feedback', 'danger');
         }
@@ -337,7 +337,7 @@ function showFeedbackForm() {
 function applyFilters() {
     console.log('🔍 Applying filters...');
     loadFeedback();
-    loadStatistics();
+    // loadStatistics(); // Statistics section removed
 }
 
 // Reset filters
@@ -348,7 +348,7 @@ function resetFilters() {
     document.getElementById('typeFilter').value = '';
     document.getElementById('ratingFilter').value = '';
     loadFeedback();
-    loadStatistics();
+    // loadStatistics(); // Statistics section removed
 }
 
 // Helper functions
