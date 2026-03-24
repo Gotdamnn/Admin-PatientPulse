@@ -524,7 +524,7 @@ async function ensureEmailVerificationTable() {
             const createSQL = `
                 CREATE TABLE IF NOT EXISTS email_verification_tokens (
                     id SERIAL PRIMARY KEY,
-                    email VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
                     token VARCHAR(255) UNIQUE NOT NULL,
                     is_verified BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -541,6 +541,43 @@ async function ensureEmailVerificationTable() {
             console.log('✅ Created email_verification_tokens table');
         } else {
             console.log('✅ Email verification tokens table already exists');
+            
+            // Migration: Add UNIQUE constraint to email column if it doesn't exist
+            try {
+                // Check if email column has unique constraint
+                const constraintCheck = await client.query(`
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints 
+                        WHERE table_name='email_verification_tokens' 
+                        AND constraint_type='UNIQUE'
+                        AND constraint_name LIKE '%email%'
+                    ) as has_constraint;
+                `);
+                
+                if (constraintCheck.rows[0].has_constraint) {
+                    console.log('✅ Email uniqueness constraint already exists');
+                } else {
+                    // Drop existing index if it exists
+                    try {
+                        await client.query(`DROP INDEX IF EXISTS idx_email_verification_email;`);
+                    } catch (e) {
+                        // Index may not exist, ignore
+                    }
+                    
+                    // Add unique constraint
+                    await client.query(`
+                        ALTER TABLE email_verification_tokens 
+                        ADD CONSTRAINT email_verification_tokens_email_unique UNIQUE(email)
+                    `);
+                    console.log('✅ Added UNIQUE constraint to email column');
+                }
+            } catch (constraintErr) {
+                if (constraintErr.code === '42P07' || constraintErr.message.includes('already exists')) {
+                    console.log('✅ Email constraint already exists');
+                } else {
+                    console.log('⚠️  Note: Email constraint update skipped:', constraintErr.message);
+                }
+            }
         }
         return true;
     } catch (err) {
