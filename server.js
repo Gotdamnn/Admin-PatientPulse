@@ -93,7 +93,6 @@ import departmentRoutes from './routes/departments.js';
 import feedbackRoutes from './routes/feedback.js';
 import employeeReportsRoutes from './routes/employee-reports.js';
 import passwordRoutes from './routes/password.js';
-import testRoutes from './routes/test.js';
 
 // ============= Mount Routes =============
 app.use('/api/auth', authRoutes);
@@ -104,7 +103,6 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/employee-reports', employeeReportsRoutes);
 app.use('/api/password', passwordRoutes);
-app.use('/api/test', testRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
