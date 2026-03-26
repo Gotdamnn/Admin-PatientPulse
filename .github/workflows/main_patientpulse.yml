@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: '24.x'
 
+
+      - name: Set execute permission for jest (Linux CI only)
+        run: |
+          if [ -f node_modules/.bin/jest ]; then chmod +x node_modules/.bin/jest; fi
+
       - name: npm install, build, and test
         run: |
           npm install
