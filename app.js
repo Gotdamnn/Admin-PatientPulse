@@ -614,22 +614,22 @@ app.post('/api/auth/register', async (req, res) => {
         if (existingPatient.rows.length > 0) {
             return res.status(409).json({ success: false, error: 'Email already registered' });
         }
-        
+
         // Create patient record with last_visit set to current date
         const patientResult = await pool.query(
             'INSERT INTO patients (name, email, status, last_visit) VALUES ($1, $2, $3, CURRENT_DATE) RETURNING id, patient_id, name, email, status, last_visit',
             [name, email, 'active']
         );
-        
+
         const newPatient = patientResult.rows[0];
-        
+
         // Also create admin user for authentication (so they can login)
         const hashedPassword = await bcrypt.hash(password, 10);
         await pool.query(
             'INSERT INTO admins (email, password, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING',
             [email, hashedPassword, name]
         );
-        
+
         // Log the registration/account creation
         await logAudit('patients', 'Create', newPatient.id, null, { 
             patient_id: newPatient.patient_id,
@@ -637,13 +637,21 @@ app.post('/api/auth/register', async (req, res) => {
             name: newPatient.name,
             action_type: 'Account Registration'
         }, newPatient.email, clientIp);
-        
+
+        // Send verification email after successful registration
+        const { sendVerificationEmail } = require('./config/email-service');
+        const emailResult = await sendVerificationEmail(email, name, ''); // You may want to generate and pass an OTP if needed
+        if (!emailResult.success) {
+            console.error('❌ Error sending verification email after registration:', emailResult.error);
+        }
+
         res.status(201).json({ 
             success: true, 
             message: 'Patient registered successfully',
-            patient: newPatient
+            patient: newPatient,
+            emailSent: emailResult.success
         });
-        
+
     } catch (err) {
         console.error('Registration error:', err);
         res.status(500).json({ success: false, error: 'Registration failed: ' + err.message });
