@@ -2701,10 +2701,13 @@ async function checkOfflineDevices() {
 }
 
 // Run device check every 5 minutes
-setInterval(checkOfflineDevices, 5 * 60 * 1000);
 
-// Run initial check after 30 seconds
-setTimeout(checkOfflineDevices, 30 * 1000);
+let offlineInterval, offlineTimeout;
+if (process.env.NODE_ENV !== 'test') {
+    offlineInterval = setInterval(checkOfflineDevices, 5 * 60 * 1000);
+    // Run initial check after 30 seconds
+    offlineTimeout = setTimeout(checkOfflineDevices, 30 * 1000);
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
