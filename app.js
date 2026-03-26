@@ -1,14 +1,11 @@
-﻿require('dotenv').config(); // Load environment variables from .env file
+﻿require('dotenv').config();
 const express = require('express');
-const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
-const bcrypt = require('bcrypt');
-const { runMigrations } = require('./database/init-db');
-const rbac = require('./src/rbac'); // Import RBAC module
-const { initializeEmailRoutes } = require('./src/email-verification-routes'); // Import email routes
-const { initializePasswordResetRoutes } = require('./src/password-reset-routes'); // Import password reset routes
-const { sendVerificationEmail } = require('./config/email-service'); // Import email service
+const rbac = require('./src/rbac');
+const { initializeEmailRoutes } = require('./src/email-verification-routes');
+const { initializePasswordResetRoutes } = require('./src/password-reset-routes');
+const { sendVerificationEmail } = require('./config/email-service');
 
 const app = express();
 app.use(express.json());
@@ -84,57 +81,15 @@ app.get('/favicon.ico', (req, res) => {
     res.status(204).end(); // No Content response
 });
 
-// PostgreSQL connection setup - Using environment variables for security
-const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'appdevdb',
-    password: process.env.DB_PASSWORD || 'Carlzabala@123',
-    port: process.env.DB_PORT || 5432,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-});
+// The following are initialized in server.js:
+// - Database connection (pool)
+// - RBAC pool
+// - Email/password routes
+// - Background jobs
+// - Server listen
 
-// Test database connection with timeout
-const testConnection = async () => {
-    try {
-        const result = await pool.query('SELECT NOW()');
-        console.log('✅ DATABASE CONNECTED SUCCESSFULLY');
-        console.log('   Server time:', result.rows[0]);
-        console.log('   Host:', process.env.DB_HOST);
-        console.log('   Database:', process.env.DB_NAME);
-        
-        // Run database migrations after successful connection
-        await runMigrations();
-    } catch (err) {
-        console.error('❌ DATABASE CONNECTION FAILED');
-        console.error('   Error:', err.message);
-        console.error('   Host:', process.env.DB_HOST);
-        console.error('   User:', process.env.DB_USER);
-        console.error('   SSL:', process.env.DB_SSL);
-        console.error('   Please check:');
-        console.error('   - Is PostgreSQL running?');
-        console.error('   - Can reach host:', process.env.DB_HOST);
-        console.error('   - Database credentials correct?');
-    }
-};
-
-// Test connection after a short delay
-setTimeout(testConnection, 1000);
-
-pool.on('error', (err) => {
-    console.error('🔴 Pool Error:', err.message);
-});
-
-// Initialize RBAC module with pool
-rbac.setPool(pool);
-
-// Initialize and mount email verification routes
-const emailRoutes = initializeEmailRoutes(pool);
-app.use('/api', emailRoutes);
-
-// Initialize and mount password reset routes
-const passwordResetRoutes = initializePasswordResetRoutes(pool);
-app.use('/api', passwordResetRoutes);
+// Export the app for use in server.js and tests
+module.exports = app;
 
 // ===== HELPER FUNCTION TO EXTRACT CLIENT IP =====
 function getClientIp(req) {
