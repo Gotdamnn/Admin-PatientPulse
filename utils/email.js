@@ -1,9 +1,15 @@
 
 
 
+
 import 'dotenv/config';
 import nodemailer from 'nodemailer';
 import { emailVerification, passwordReset } from '../config/email-templates.js';
+
+// Check for required SMTP environment variables
+if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+  throw new Error('Missing SMTP_USER or SMTP_PASSWORD environment variable. Please check your .env configuration.');
+}
 
 // Generate 6-digit OTP
 export function generateOTP() {

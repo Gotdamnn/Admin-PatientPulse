@@ -2,10 +2,19 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+
 const rbac = require('./src/rbac');
 const { initializeEmailRoutes } = require('./src/email-verification-routes');
 const { initializePasswordResetRoutes } = require('./src/password-reset-routes');
 const { sendVerificationEmail } = require('./config/email-service');
+
+// Import the database pool from server.js
+let pool;
+try {
+    pool = require('./server').pool;
+} catch (err) {
+    console.warn('⚠️ Could not import pool from server.js. If running tests or in a context where server.js is not loaded, database features may not work.');
+}
 
 const app = express();
 app.use(express.json());
