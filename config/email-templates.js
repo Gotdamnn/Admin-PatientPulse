@@ -18,8 +18,11 @@ const emailTemplates = {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
-            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: linear-gradient(135deg, #e8f2ff 0%, #f0f6ff 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-                <div style="max-width: 600px; width: 100%; padding: 20px;">
+                        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: linear-gradient(135deg, #e8f2ff 0%, #f0f6ff 100%); min-height: 100vh;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                        <td align="center">
+                                            <div style="max-width: 600px; width: 100%; padding: 20px; margin: 0 auto;">
                     <!-- Header with Blue Gradient Background -->
                     <div style="background: linear-gradient(135deg, #0078D4 0%, #0066CC 100%); border-radius: 16px 16px 0 0; padding: 40px 30px; text-align: center; position: relative; overflow: hidden;">
                         <div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
@@ -88,7 +91,10 @@ const emailTemplates = {
                             © 2026 PatientPulse. All rights reserved. | Healthcare Management System
                         </p>
                     </div>
-                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
             </body>
             </html>
             `,
@@ -129,8 +135,11 @@ Security Tips:
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
-            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: linear-gradient(135deg, #e8f2ff 0%, #f0f6ff 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-                <div style="max-width: 600px; width: 100%; padding: 20px;">
+                        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: linear-gradient(135deg, #e8f2ff 0%, #f0f6ff 100%); min-height: 100vh;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                        <td align="center">
+                                            <div style="max-width: 600px; width: 100%; padding: 20px; margin: 0 auto;">
                     <!-- Header with Blue Gradient Background -->
                     <div style="background: linear-gradient(135deg, #0078D4 0%, #0066CC 100%); border-radius: 16px 16px 0 0; padding: 40px 30px; text-align: center; position: relative; overflow: hidden;">
                         <div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
@@ -210,7 +219,10 @@ Security Tips:
                             © 2024 PatientPulse. All rights reserved. | Healthcare Management System
                         </p>
                     </div>
-                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
             </body>
             </html>
             `,
@@ -391,4 +403,6 @@ For questions or support, please contact our support team.
     }
 };
 
-module.exports = emailTemplates;
+export const emailVerification = emailTemplates.emailVerification;
+export const passwordReset = emailTemplates.passwordReset;
+export const welcomeEmail = emailTemplates.welcomeEmail;

@@ -1,7 +1,9 @@
 
 
 
+import 'dotenv/config';
 import nodemailer from 'nodemailer';
+import { emailVerification, passwordReset } from '../config/email-templates.js';
 
 // Generate 6-digit OTP
 export function generateOTP() {
@@ -31,48 +33,55 @@ export async function testSMTPConnection() {
 
 // Send OTP Email
 export async function sendOTPEmail(email, otp, subject = 'Your OTP Code', name = '') {
+  const template = emailVerification(name || 'User', otp);
   const mailOptions = {
     from: process.env.SMTP_USER,
     to: email,
-    subject,
-    html: `
-      <div style="font-family: Arial, sans-serif;">
-        <h2>Hi${name ? ' ' + name : ''},</h2>
-        <p>Your OTP code is:</p>
-        <h1 style="color: #007bff;">${otp}</h1>
-        <p>This code will expire in 10 minutes.</p>
-        <br>
-        <p>If you did not request this, please ignore this email.</p>
-        <hr>
-        <small>PatientPulse Team</small>
-      </div>
-    `,
+    subject: template.subject,
+    html: template.html,
+    text: template.text
   };
   return transporter.sendMail(mailOptions);
 }
 
+
 // Send Password Reset Email
 export async function sendPasswordResetEmail(email, resetLink, token, name = '') {
+  // If a resetLink is provided, add it to the template, else just use the code
+  const template = passwordReset(name || 'User', token);
+  let html = template.html;
+  if (resetLink) {
+    // Insert a reset link button above the code box
+    html = html.replace(
+      '<!-- Reset Code Box -->',
+      `<div style="text-align:center;margin:30px 0;">
+        <a href="${resetLink}" style="display:inline-block;padding:14px 40px;background:linear-gradient(135deg,#0078D4 0%,#0066CC 100%);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(0,120,212,0.3);">Reset Password</a>
+      </div>\n<!-- Reset Code Box -->`
+    );
+  }
   const mailOptions = {
     from: process.env.SMTP_USER,
     to: email,
-    subject: 'PatientPulse Password Reset',
-    html: `
-      <div style="font-family: Arial, sans-serif;">
-        <h2>Hi${name ? ' ' + name : ''},</h2>
-        <p>You requested a password reset. Click the link below to reset your password:</p>
-        <a href="${resetLink}" style="display:inline-block;padding:10px 20px;background:#007bff;color:#fff;text-decoration:none;border-radius:5px;">Reset Password</a>
-        <p>Or use this code: <b>${token}</b></p>
-        <p>This link/code will expire in 30 minutes.</p>
-        <br>
-        <p>If you did not request this, please ignore this email.</p>
-        <hr>
-        <small>PatientPulse Team</small>
-      </div>
-    `,
+    subject: template.subject,
+    html,
+    text: template.text
   };
-  return transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId, response: info.response };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
+
+
+
+
+
+
+
+
+import 'dotenv/config';
 
 
 
