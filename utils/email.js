@@ -16,16 +16,27 @@ export function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Create nodemailer transporter using environment variables
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+
+// Debug log for SMTP credentials
+console.log('SMTP_USER:', process.env.SMTP_USER);
+console.log('SMTP_PASSWORD:', process.env.SMTP_PASSWORD ? '***set***' : '***missing***');
+
+// Only create transporter if not in test environment
+let transporter = null;
+if (process.env.NODE_ENV !== 'test') {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+    throw new Error('Missing SMTP_USER or SMTP_PASSWORD environment variable. Please check your .env configuration.');
+  }
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+}
 
 // Utility to test SMTP connection
 export async function testSMTPConnection() {
@@ -37,8 +48,12 @@ export async function testSMTPConnection() {
   }
 }
 
+
 // Send OTP Email
 export async function sendOTPEmail(email, otp, subject = 'Your OTP Code', name = '') {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: true, message: 'Email sending skipped in test' };
+  }
   const template = emailVerification(name || 'User', otp);
   const mailOptions = {
     from: process.env.SMTP_USER,
@@ -51,8 +66,12 @@ export async function sendOTPEmail(email, otp, subject = 'Your OTP Code', name =
 }
 
 
+
 // Send Password Reset Email
 export async function sendPasswordResetEmail(email, resetLink, token, name = '') {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: true, message: 'Email sending skipped in test' };
+  }
   // If a resetLink is provided, add it to the template, else just use the code
   const template = passwordReset(name || 'User', token);
   let html = template.html;
