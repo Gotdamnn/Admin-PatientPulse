@@ -1,4 +1,5 @@
 
+require('dotenv').config();
 // Sample test for server.js
 const request = require('supertest');
 const app = require('../app'); // Adjust path if needed
