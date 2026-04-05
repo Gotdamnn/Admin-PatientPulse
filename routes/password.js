@@ -5,6 +5,14 @@ import { generateOTP, sendOTPEmail, sendPasswordResetEmail } from '../utils/emai
 
 const router = express.Router();
 
+async function ensureResetTokenColumns() {
+  // Keep reset-token schema compatible across old/new DB setups.
+  await pool.query(`
+    ALTER TABLE password_reset_tokens
+    ADD COLUMN IF NOT EXISTS used_at TIMESTAMP NULL;
+  `);
+}
+
 // POST /api/password/forgot - Request password reset with OTP
 router.post('/forgot', async (req, res) => {
   try {
@@ -31,10 +39,29 @@ router.post('/forgot', async (req, res) => {
       });
     }
 
-    // Mailer removed for forgot password
+    await ensureResetTokenColumns();
+
+    const user = userResult.rows[0];
+    const otp = generateOTP();
+    const expiryTime = new Date(Date.now() + 10 * 60000);
+
+    // Keep one active reset token per email.
+    await pool.query(
+      'DELETE FROM password_reset_tokens WHERE email = $1',
+      [email]
+    );
+
+    await pool.query(
+      `INSERT INTO password_reset_tokens (email, token, expires_at, created_at, used_at)
+       VALUES ($1, $2, $3, NOW(), NULL)`,
+      [email, otp, expiryTime]
+    );
+
+    await sendOTPEmail(email, otp, 'Password Reset OTP - PatientPulse', user.name || 'User');
+
     return res.json({
       success: true,
-      message: 'Forgot password mailer is disabled.',
+      message: 'If the email exists, OTP has been sent'
     });
   } catch (error) {
     console.error('Forgot password error:', error);
@@ -50,6 +77,8 @@ router.post('/forgot', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
+
+    await ensureResetTokenColumns();
 
     if (!email || !otp) {
       return res.status(400).json({
@@ -92,6 +121,8 @@ router.post('/reset', async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
+    await ensureResetTokenColumns();
+
     if (!email || !otp || !newPassword) {
       return res.status(400).json({
         success: false,
@@ -124,8 +155,9 @@ router.post('/reset', async (req, res) => {
     // Check OTP
     const tokenResult = await pool.query(
       `SELECT id, token, expires_at FROM password_reset_tokens 
-       WHERE email = $1 AND used_at IS NULL AND expires_at > NOW()`,
-      [email]
+       WHERE email = $1 AND token = $2 AND used_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [email, otp]
     );
 
     if (tokenResult.rows.length === 0) {
@@ -136,15 +168,6 @@ router.post('/reset', async (req, res) => {
     }
 
     const tokenRecord = tokenResult.rows[0];
-    const storedOtp = tokenRecord.token;
-
-    // Verify OTP
-    if (otp !== storedOtp) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid OTP'
-      });
-    }
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -180,6 +203,8 @@ router.post('/resend-otp', async (req, res) => {
   try {
     const { email } = req.body;
 
+    await ensureResetTokenColumns();
+
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -200,19 +225,25 @@ router.post('/resend-otp', async (req, res) => {
       });
     }
 
-    const userId = userResult.rows[0].id;
+    const user = userResult.rows[0];
     const otp = generateOTP();
     const expiryTime = new Date(Date.now() + 10 * 60000);
 
+    // Keep one active reset token per email.
+    await pool.query(
+      'DELETE FROM password_reset_tokens WHERE email = $1',
+      [email]
+    );
+
     // Insert new OTP record
     await pool.query(
-      `INSERT INTO password_reset_tokens (user_id, email, token, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [userId, email, otp, expiryTime]
+      `INSERT INTO password_reset_tokens (email, token, expires_at, created_at, used_at)
+       VALUES ($1, $2, $3, NOW(), NULL)`,
+      [email, otp, expiryTime]
     );
 
     // Send OTP email
-    const emailResult = await sendOTPEmail(email, otp, 'Resend OTP - PatientPulse');
+    await sendOTPEmail(email, otp, 'Resend OTP - PatientPulse', user.name || 'User');
 
     return res.json({
       success: true,
