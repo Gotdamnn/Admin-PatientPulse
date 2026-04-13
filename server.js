@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { Pool } from 'pg';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -11,12 +12,16 @@ import { dirname, resolve } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = resolve(__dirname, '.env');
-console.log('📂 Loading .env from:', envPath);
-const result = dotenv.config({ path: envPath });
-if (result.error) {
-  console.error('❌ Failed to load .env file:', result.error);
+if (existsSync(envPath)) {
+  console.log('📂 Loading .env from:', envPath);
+  const result = dotenv.config({ path: envPath });
+  if (result.error) {
+    console.error('❌ Failed to load .env file:', result.error);
+  } else {
+    console.log('✅ .env file loaded successfully');
+  }
 } else {
-  console.log('✅ .env file loaded successfully');
+  console.log('ℹ️ .env file not found, using environment variables from host');
 }
 
 // Verify env variables are loaded
