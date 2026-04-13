@@ -119,6 +119,225 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/employee-reports', employeeReportsRoutes);
 app.use('/api/password', passwordRoutes);
 
+// ===== Dashboard Data APIs =====
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT a.*, p.name AS patient_name
+      FROM alerts a
+      LEFT JOIN patients p ON a.patient_id = p.id
+      ORDER BY a.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Alerts API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/dashboard/summary', async (req, res) => {
+  try {
+    const [patientsResult, employeesResult, departmentsResult, devicesResult, alertsResult] = await Promise.all([
+      pool.query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+        FROM patients
+      `),
+      pool.query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN employment_status = 'Active' THEN 1 ELSE 0 END) AS active
+        FROM employees
+      `),
+      pool.query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END) AS active
+        FROM departments
+      `),
+      pool.query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END) AS online
+        FROM devices
+      `),
+      pool.query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN severity = 'critical' AND status = 'active' THEN 1 ELSE 0 END) AS critical
+        FROM alerts
+      `)
+    ]);
+
+    const patientsData = patientsResult.rows[0] || {};
+    const employeesData = employeesResult.rows[0] || {};
+    const departmentsData = departmentsResult.rows[0] || {};
+    const devicesData = devicesResult.rows[0] || {};
+    const alertsData = alertsResult.rows[0] || {};
+
+    res.json({
+      patients: {
+        total: parseInt(patientsData.total, 10) || 0,
+        active: parseInt(patientsData.active, 10) || 0
+      },
+      employees: {
+        total: parseInt(employeesData.total, 10) || 0,
+        active: parseInt(employeesData.active, 10) || 0
+      },
+      departments: {
+        total: parseInt(departmentsData.total, 10) || 0,
+        active: parseInt(departmentsData.active, 10) || 0
+      },
+      devices: {
+        total: parseInt(devicesData.total, 10) || 0,
+        online: parseInt(devicesData.online, 10) || 0
+      },
+      alerts: {
+        total: parseInt(alertsData.total, 10) || 0,
+        critical: parseInt(alertsData.critical, 10) || 0
+      }
+    });
+  } catch (err) {
+    console.error('Dashboard summary API error:', err.message);
+    res.json({
+      patients: { total: 0, active: 0 },
+      employees: { total: 0, active: 0 },
+      departments: { total: 0, active: 0 },
+      devices: { total: 0, online: 0 },
+      alerts: { total: 0, critical: 0 }
+    });
+  }
+});
+
+app.get('/api/dashboard/activity', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const result = await pool.query(
+      `SELECT id, admin_name, action, table_name, target_id,
+              COALESCE(created_at, timestamp) AS created_at
+       FROM audit_logs
+       ORDER BY COALESCE(created_at, timestamp) DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const activities = result.rows.map((log) => ({
+      id: log.id,
+      type: (log.action || 'activity').toLowerCase(),
+      title: log.action || 'Activity',
+      description: `${log.action || 'Action'} on ${log.table_name || 'system'}`,
+      user: log.admin_name,
+      timestamp: log.created_at
+    }));
+
+    res.json(activities);
+  } catch (err) {
+    console.error('Dashboard activity API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/audit-logs', async (req, res) => {
+  const { adminName, action, tableName, dateFrom, dateTo, limit, after } = req.query;
+  try {
+    let query = `
+      SELECT *, COALESCE(created_at, timestamp) AS event_time
+      FROM audit_logs
+      WHERE 1 = 1
+    `;
+    const params = [];
+
+    if (adminName) {
+      params.push(`%${adminName}%`);
+      query += ` AND admin_name ILIKE $${params.length}`;
+    }
+
+    if (action) {
+      const actions = String(action)
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean);
+      if (actions.length > 0) {
+        params.push(actions);
+        query += ` AND action = ANY($${params.length})`;
+      }
+    }
+
+    if (tableName) {
+      params.push(tableName);
+      query += ` AND table_name = $${params.length}`;
+    }
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      query += ` AND COALESCE(created_at, timestamp) >= $${params.length}`;
+    }
+
+    if (dateTo) {
+      params.push(`${dateTo} 23:59:59`);
+      query += ` AND COALESCE(created_at, timestamp) <= $${params.length}`;
+    }
+
+    if (after) {
+      params.push(after);
+      query += ` AND COALESCE(created_at, timestamp) > $${params.length}`;
+    }
+
+    const rowLimit = Math.min(parseInt(limit, 10) || 100, 1000);
+    params.push(rowLimit);
+    query += ` ORDER BY COALESCE(created_at, timestamp) DESC LIMIT $${params.length}`;
+
+    const result = await pool.query(query, params);
+    const normalized = result.rows.map((row) => ({
+      ...row,
+      created_at: row.created_at || row.timestamp || row.event_time,
+      timestamp: row.created_at || row.timestamp || row.event_time
+    }));
+    res.json(normalized);
+  } catch (err) {
+    console.error('Audit logs API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM notifications ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Notifications API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.put('/api/notifications/:id/read', async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (String(id).startsWith('auth_')) {
+      return res.json({ success: true, skipped: true });
+    }
+    const result = await pool.query(
+      'UPDATE notifications SET read = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (result.rows.length > 0) {
+      return res.json(result.rows[0]);
+    }
+    return res.status(404).json({ error: 'Notification not found' });
+  } catch (err) {
+    console.error('Mark notification read API error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/notifications', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM notifications RETURNING id');
+    res.json({ success: true, count: result.rowCount || 0 });
+  } catch (err) {
+    console.error('Clear notifications API error:', err.message);
+    res.json({ success: true, count: 0 });
+  }
+});
+
 // ============= Web View Routes =============
 app.get('/', (req, res) => res.redirect('/login'));
 app.get('/dashboard', (req, res) => res.render('dashboard', { title: 'Dashboard', activePage: 'dashboard' }));
