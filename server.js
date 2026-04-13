@@ -24,12 +24,26 @@ if (existsSync(envPath)) {
   console.log('ℹ️ .env file not found, using environment variables from host');
 }
 
+// Normalize JWT secret sources once so auth routes have a consistent key.
+const normalizedJwtSecret = process.env.JWT_SECRET || process.env.SECRET_KEY || process.env.JWT_KEY;
+if (!normalizedJwtSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Missing JWT secret. Set JWT_SECRET (or SECRET_KEY/JWT_KEY) in environment variables.');
+  }
+
+  process.env.JWT_SECRET = 'dev-insecure-jwt-secret-change-me-before-production';
+  console.warn('⚠️ JWT secret not set. Using temporary development secret. Configure JWT_SECRET in .env.');
+} else {
+  process.env.JWT_SECRET = normalizedJwtSecret;
+}
+
 // Verify env variables are loaded
 console.log('\n📋 Env Variables Check:');
 console.log('   SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
 console.log('   SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET');
 console.log('   SMTP_USER:', process.env.SMTP_USER || 'NOT SET');
 console.log('   DB_HOST:', process.env.DB_HOST || 'NOT SET');
+console.log('   JWT_SECRET:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
 console.log();
 
 // Initialize Express app
