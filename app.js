@@ -4475,14 +4475,16 @@ app.post('/api/debug/create-sample-report', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || 'localhost';
 
-app.listen(PORT, () => {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const dashboardUrl = isProduction 
-        ? `https://patientpulse-app.azurewebsites.net/dashboard`
-        : `http://localhost:${PORT}/dashboard`;
-    
-    console.log(`✅ PatientPulse server running on port ${PORT}`);
-    console.log(`📊 Admin dashboard: ${dashboardUrl}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        const isProduction = process.env.NODE_ENV === 'production';
+        const dashboardUrl = isProduction 
+            ? `https://patientpulse-app.azurewebsites.net/dashboard`
+            : `http://localhost:${PORT}/dashboard`;
+        
+        console.log(`✅ PatientPulse server running on port ${PORT}`);
+        console.log(`📊 Admin dashboard: ${dashboardUrl}`);
+        console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+}
 
