@@ -4,8 +4,19 @@
  */
 
 const transporter = require('./mailer');
-const emailTemplates = require('./email-templates');
 const crypto = require('crypto');
+
+let cachedEmailTemplates = null;
+
+async function getEmailTemplates() {
+    if (cachedEmailTemplates) {
+        return cachedEmailTemplates;
+    }
+
+    const imported = await import('./email-templates.js');
+    cachedEmailTemplates = imported.default || imported;
+    return cachedEmailTemplates;
+}
 
 /**
  * Generate a 6-digit OTP code
@@ -42,6 +53,7 @@ function generateVerificationLink(token) {
  */
 async function sendVerificationEmail(email, userName, verificationOTP) {
     try {
+        const emailTemplates = await getEmailTemplates();
         const emailContent = emailTemplates.emailVerification(userName, verificationOTP);
 
         const mailOptions = {
@@ -77,6 +89,7 @@ async function sendVerificationEmail(email, userName, verificationOTP) {
  */
 async function sendPasswordResetEmail(email, userName, resetToken) {
     try {
+        const emailTemplates = await getEmailTemplates();
         // Use the reset token as reset code (6-digit OTP format)
         const resetCode = resetToken.toString();
         const emailContent = emailTemplates.passwordReset(userName, resetCode);
@@ -113,6 +126,7 @@ async function sendPasswordResetEmail(email, userName, resetToken) {
  */
 async function sendWelcomeEmail(email, userName) {
     try {
+        const emailTemplates = await getEmailTemplates();
         const emailContent = emailTemplates.welcomeEmail(userName);
 
         const mailOptions = {
