@@ -528,9 +528,23 @@ app.get('/api/employee-reports/:id', async (req, res) => {
 
 app.post('/api/employee-reports', async (req, res) => {
   try {
-    const employeeId = req.body.employee_id ?? req.body.employeeId;
+    const rawEmployeeId = req.body.employee_id ?? req.body.employeeId;
+    const rawDepartmentId = req.body.department_id ?? req.body.departmentId;
+    const employeeId = rawEmployeeId === '' || rawEmployeeId === undefined || rawEmployeeId === null
+      ? null
+      : Number(rawEmployeeId);
+    const departmentId = rawDepartmentId === '' || rawDepartmentId === undefined || rawDepartmentId === null
+      ? null
+      : Number(rawDepartmentId);
+
+    if ((employeeId !== null && Number.isNaN(employeeId)) || (departmentId !== null && Number.isNaN(departmentId))) {
+      return res.status(400).json({
+        success: false,
+        error: 'employeeId/departmentId must be numeric when provided',
+      });
+    }
+
     const employeeName = req.body.employee_name ?? req.body.employeeName ?? (employeeId ? `Employee ${employeeId}` : null);
-    const departmentId = req.body.department_id ?? req.body.departmentId ?? null;
     const departmentName = req.body.department_name ?? req.body.departmentName ?? null;
     const reportType = req.body.report_type ?? req.body.reportType;
     const category = req.body.category ?? reportType ?? 'Other';
@@ -540,10 +554,10 @@ app.post('/api/employee-reports', async (req, res) => {
     const severity = req.body.severity ?? 'Medium';
     const priority = req.body.priority ?? 'Normal';
 
-    if (!employeeId || !employeeName || !reportType || !title || !description) {
+    if (!employeeName || !reportType || !title || !description) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: employeeId, employeeName, reportType, title, description',
+        error: 'Missing required fields: employeeName, reportType, title, description',
       });
     }
 

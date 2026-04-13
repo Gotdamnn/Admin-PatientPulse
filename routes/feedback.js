@@ -93,10 +93,30 @@ router.post('/add', verifyToken, async (req, res) => {
 });
 
 // POST /api/feedback - Submit feedback (alternate endpoint)
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', async (req, res, next) => {
   try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return next();
+    }
+
+    let decoded;
+    try {
+      decoded = await new Promise((resolve, reject) => {
+        import('jsonwebtoken').then(({ default: jwt }) => {
+          try {
+            resolve(jwt.verify(token, getJwtSecret()));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    } catch (tokenError) {
+      return next();
+    }
+
     const { feedbackType, subject, message, rating, userEmail } = req.body;
-    const userId = req.userId.toString();
+    const userId = decoded.userId.toString();
 
     // Validation
     if (!feedbackType || !subject || !message) {
@@ -138,9 +158,29 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // GET /api/feedback - Get user's feedback (kept for compatibility)
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
-    const patientId = req.userId;
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return next();
+    }
+
+    let decoded;
+    try {
+      decoded = await new Promise((resolve, reject) => {
+        import('jsonwebtoken').then(({ default: jwt }) => {
+          try {
+            resolve(jwt.verify(token, getJwtSecret()));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    } catch (tokenError) {
+      return next();
+    }
+
+    const patientId = decoded.userId;
 
     try {
       const result = await pool.query(
@@ -192,9 +232,26 @@ router.post('/employee-reports', verifyToken, async (req, res) => {
       });
     }
 
-    const normalizedEmployeeName = employeeName || `Employee ${employeeId}`;
+    const normalizedEmployeeId = employeeId === '' || employeeId === undefined || employeeId === null ? null : Number(employeeId);
+    const normalizedDepartmentId = departmentId === '' || departmentId === undefined || departmentId === null ? null : Number(departmentId);
+
+    if ((normalizedEmployeeId !== null && Number.isNaN(normalizedEmployeeId)) || (normalizedDepartmentId !== null && Number.isNaN(normalizedDepartmentId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'employeeId/departmentId must be numeric when provided',
+      });
+    }
+
+    const normalizedEmployeeName = employeeName || (normalizedEmployeeId ? `Employee ${normalizedEmployeeId}` : null);
     const normalizedCategory = category || reportType || 'Other';
     const normalizedSeverity = severity || 'Medium';
+
+    if (!normalizedEmployeeName) {
+      return res.status(400).json({
+        success: false,
+        message: 'employeeName is required',
+      });
+    }
 
     let reportId;
     try {
@@ -204,7 +261,7 @@ router.post('/employee-reports', verifyToken, async (req, res) => {
          (employee_id, employee_name, department_id, department_name, report_type, category, title, description, severity, reported_by_id, report_date, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING report_id`,
-        [employeeId, normalizedEmployeeName, departmentId || null, departmentName, reportType, normalizedCategory, title, description, normalizedSeverity, patientId]
+        [normalizedEmployeeId, normalizedEmployeeName, normalizedDepartmentId, departmentName, reportType, normalizedCategory, title, description, normalizedSeverity, patientId]
       );
       reportId = result.rows[0].report_id;
     } catch (schemaErr) {
@@ -218,7 +275,7 @@ router.post('/employee-reports', verifyToken, async (req, res) => {
          (employee_id, department_name, report_type, title, description, severity, created_by, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id`,
-        [employeeId, departmentName, reportType, title, description, (normalizedSeverity || 'medium').toLowerCase(), patientId]
+        [normalizedEmployeeId, departmentName, reportType, title, description, (normalizedSeverity || 'medium').toLowerCase(), patientId]
       );
       reportId = fallbackResult.rows[0].id;
     }
