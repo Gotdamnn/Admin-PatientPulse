@@ -528,18 +528,31 @@ app.get('/api/employee-reports/:id', async (req, res) => {
 
 app.post('/api/employee-reports', async (req, res) => {
   try {
-    const {
-      employee_id, employee_name, department_id, department_name,
-      report_type, category, title, description, reported_by,
-      severity, priority
-    } = req.body;
+    const employeeId = req.body.employee_id ?? req.body.employeeId;
+    const employeeName = req.body.employee_name ?? req.body.employeeName ?? (employeeId ? `Employee ${employeeId}` : null);
+    const departmentId = req.body.department_id ?? req.body.departmentId ?? null;
+    const departmentName = req.body.department_name ?? req.body.departmentName ?? null;
+    const reportType = req.body.report_type ?? req.body.reportType;
+    const category = req.body.category ?? reportType ?? 'Other';
+    const title = req.body.title;
+    const description = req.body.description;
+    const reportedBy = req.body.reported_by ?? req.body.reportedBy ?? req.body.reported_by_name ?? 'System';
+    const severity = req.body.severity ?? 'Medium';
+    const priority = req.body.priority ?? 'Normal';
+
+    if (!employeeId || !employeeName || !reportType || !title || !description) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: employeeId, employeeName, reportType, title, description',
+      });
+    }
 
     const result = await pool.query(
       `INSERT INTO employee_reports
       (employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, severity, priority, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Open')
       RETURNING *`,
-      [employee_id, employee_name, department_id || null, department_name || null, report_type, category, title, description, reported_by || 'System', severity || 'Medium', priority || 'Normal']
+      [employeeId, employeeName, departmentId, departmentName, reportType, category, title, description, reportedBy, severity, priority]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
