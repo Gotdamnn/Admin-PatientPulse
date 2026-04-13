@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { networkInterfaces } from 'os';
 import { Pool } from 'pg';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -751,10 +752,28 @@ async function initializeDatabase() {
   }
 }
 
+function getLanIpv4Addresses() {
+  const nets = networkInterfaces();
+  const ips = [];
+
+  for (const key of Object.keys(nets)) {
+    const netList = nets[key] || [];
+    for (const net of netList) {
+      if (net.family === 'IPv4' && !net.internal) {
+        ips.push(net.address);
+      }
+    }
+  }
+
+  return ips;
+}
+
 // Start server
 app.listen(PORT, async () => {
   // Initialize database on startup
   await initializeDatabase();
+  const lanIps = getLanIpv4Addresses();
+  const apiUrls = [`http://localhost:${PORT}/api`, ...lanIps.map((ip) => `http://${ip}:${PORT}/api`)];
   
   console.log(`
 ╔════════════════════════════════════════╗
@@ -765,4 +784,9 @@ app.listen(PORT, async () => {
 ║ 📦 Database: ${process.env.DB_NAME}
 ╚════════════════════════════════════════╝
   `);
+
+  console.log('🔗 API Base URLs you can use:');
+  for (const url of apiUrls) {
+    console.log(`   - ${url}`);
+  }
 });

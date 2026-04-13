@@ -26,6 +26,93 @@ const generateToken = (userId) => {
   });
 };
 
+const verifyToken = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Token required' });
+    }
+
+    const decoded = jwt.verify(token, getJwtSecret());
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+};
+
+// Backward-compatible readings endpoints for clients using /api/auth/* paths.
+router.get('/readings', verifyToken, async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const patientId = req.userId;
+
+    const result = await pool.query(
+      `SELECT id, body_temperature, created_at FROM patient_vitals
+       WHERE patient_id = $1 AND created_at >= NOW() - INTERVAL '${days} days'
+       ORDER BY created_at DESC`,
+      [patientId]
+    );
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      readings: result.rows.map((row) => ({
+        id: row.id,
+        temperature: parseFloat(row.body_temperature),
+        created_at: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching readings from /api/auth/readings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch readings',
+      error: error.message,
+    });
+  }
+});
+
+router.post('/readings', verifyToken, async (req, res) => {
+  try {
+    const { temperature } = req.body;
+    const patientId = req.userId;
+
+    if (!temperature || temperature < 30 || temperature > 45) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid temperature value',
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO patient_vitals
+       (patient_id, body_temperature, created_at)
+       VALUES ($1, $2, NOW())
+       RETURNING id, body_temperature, created_at`,
+      [patientId, temperature]
+    );
+
+    const reading = result.rows[0];
+    res.status(201).json({
+      success: true,
+      message: 'Temperature reading recorded',
+      reading: {
+        id: reading.id,
+        temperature: parseFloat(reading.body_temperature),
+        timestamp: reading.created_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error adding reading from /api/auth/readings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to record reading',
+      error: error.message,
+    });
+  }
+});
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
@@ -41,15 +128,100 @@ router.post('/register', async (req, res) => {
     console.log('🔐 Password:', password ? 'provided' : 'missing', '| Type:', typeof password);
     console.log('👤 Name:', name, '| Type:', typeof name);
 
-    // Validation
-      if (!email || !password || !name) {
-        console.log('❌ Validation failed - Missing fields');
-        return res.status(400).json({
-          success: false,
-          message: 'Email, password, and full name are required',
-          received: { email: !!email, password: !!password, name: !!name }
+    // Compatibility for older clients that mistakenly call register with a null password
+    // after account creation. If the account already exists, return success as a no-op.
+    if (email && !password) {
+      const existingUserResult = await pool.query(
+        'SELECT id, email, name FROM patients WHERE email = $1',
+        [email]
+      );
+
+      if (existingUserResult.rows.length > 0) {
+        const existingUser = existingUserResult.rows[0];
+        return res.json({
+          success: true,
+          message: 'Account already registered',
+          alreadyRegistered: true,
+          user: {
+            id: existingUser.id,
+            email: existingUser.email,
+            name: existingUser.name,
+          },
         });
       }
+    }
+
+    // Compatibility shim:
+    // Some older/mobile clients accidentally call /api/auth/register for readings APIs.
+    // If an authenticated token is present and registration fields are missing, treat it as readings flow.
+    const bearerToken = req.headers.authorization?.split(' ')[1];
+    if (bearerToken && !(email && password && name)) {
+      let decoded;
+      try {
+        decoded = jwt.verify(bearerToken, getJwtSecret());
+      } catch (tokenError) {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+      }
+
+      const patientId = decoded.userId;
+      const temperature = req.body?.temperature;
+      const days = req.body?.days || req.query?.days || 7;
+
+      if (typeof temperature !== 'undefined' && temperature !== null) {
+        if (temperature < 30 || temperature > 45) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid temperature value',
+          });
+        }
+
+        const insertResult = await pool.query(
+          `INSERT INTO patient_vitals
+           (patient_id, body_temperature, created_at)
+           VALUES ($1, $2, NOW())
+           RETURNING id, body_temperature, created_at`,
+          [patientId, temperature]
+        );
+
+        const reading = insertResult.rows[0];
+        return res.status(201).json({
+          success: true,
+          message: 'Temperature reading recorded',
+          reading: {
+            id: reading.id,
+            temperature: parseFloat(reading.body_temperature),
+            timestamp: reading.created_at,
+          },
+        });
+      }
+
+      const readingsResult = await pool.query(
+        `SELECT id, body_temperature, created_at FROM patient_vitals
+         WHERE patient_id = $1 AND created_at >= NOW() - INTERVAL '${days} days'
+         ORDER BY created_at DESC`,
+        [patientId]
+      );
+
+      return res.json({
+        success: true,
+        count: readingsResult.rows.length,
+        readings: readingsResult.rows.map((row) => ({
+          id: row.id,
+          temperature: parseFloat(row.body_temperature),
+          created_at: row.created_at,
+        })),
+      });
+    }
+
+    // Validation
+    if (!email || !password || !name) {
+      console.log('❌ Validation failed - Missing fields');
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, and full name are required',
+        received: { email: !!email, password: !!password, name: !!name }
+      });
+    }
 
     // Check if user exists in patients table
     const userExists = await pool.query(
