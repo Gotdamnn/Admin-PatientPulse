@@ -173,15 +173,34 @@ app.get('/api/employees', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        e.*, d.department_name
+        e.employee_id,
+        e.first_name,
+        e.middle_name,
+        e.last_name,
+        e.email,
+        e.phone_number,
+        e.job_title,
+        e.department_id,
+        e.hire_date,
+        e.salary,
+        e.status,
+        e.created_at,
+        e.updated_at,
+        e.gender,
+        e.date_of_birth,
+        e.address,
+        e.employment_type,
+        e.employment_status,
+        e.employee_number,
+        d.department_name
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.department_id
       ORDER BY e.first_name, e.last_name
     `);
-    res.json(result.rows);
+    res.json({ success: true, employees: result.rows });
   } catch (err) {
     console.error('Employees API error:', err.message);
-    res.json([]);
+    res.json({ success: true, employees: [] });
   }
 });
 
