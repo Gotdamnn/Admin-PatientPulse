@@ -6,9 +6,22 @@ import { generateOTP, sendOTPEmail } from '../utils/email.js';
 
 const router = express.Router();
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET || process.env.SECRET_KEY || process.env.JWT_KEY;
+  if (secret) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT secret is not configured. Set JWT_SECRET (or SECRET_KEY/JWT_KEY).');
+  }
+
+  return 'dev-insecure-jwt-secret-change-me-before-production';
+};
+
 // Helper: Generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+  return jwt.sign({ userId }, getJwtSecret(), {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
@@ -415,7 +428,7 @@ router.post('/verify', async (req, res) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
 
     const result = await pool.query(
       'SELECT id, email, full_name FROM users WHERE id = $1',

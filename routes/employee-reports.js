@@ -3,6 +3,10 @@ import { pool } from '../server.js';
 
 const router = express.Router();
 
+const getJwtSecret = () => {
+  return process.env.JWT_SECRET || process.env.SECRET_KEY || process.env.JWT_KEY || 'dev-insecure-jwt-secret-change-me-before-production';
+};
+
 // Middleware: Verify JWT token
 const verifyToken = async (req, res, next) => {
   try {
@@ -14,7 +18,7 @@ const verifyToken = async (req, res, next) => {
     const decoded = await new Promise((resolve, reject) => {
       import('jsonwebtoken').then(({ default: jwt }) => {
         try {
-          resolve(jwt.verify(token, process.env.JWT_SECRET));
+          resolve(jwt.verify(token, getJwtSecret()));
         } catch (err) {
           reject(err);
         }
