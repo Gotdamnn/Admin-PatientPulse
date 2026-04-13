@@ -49,7 +49,20 @@ export const pool = new Pool({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com', 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'", 'https:']
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(morgan('combined'));
 
 // CORS Configuration - Allow development and production origins
@@ -113,11 +126,78 @@ import passwordRoutes from './routes/password.js';
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/readings', readingsRoutes);
-app.use('/api/employees', employeeRoutes);
-app.use('/api/departments', departmentRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/employee-reports', employeeReportsRoutes);
 app.use('/api/password', passwordRoutes);
+
+// ===== Core Admin APIs =====
+app.get('/api/patients', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, 
+              (SELECT body_temperature FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY recorded_at DESC LIMIT 1) AS latest_temperature,
+              (SELECT recorded_at FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY recorded_at DESC LIMIT 1) AS temperature_recorded_at
+       FROM patients p
+       ORDER BY p.created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Patients API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/devices', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM devices ORDER BY id DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Devices API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/employees', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        e.*, d.department_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.department_id
+      ORDER BY e.first_name, e.last_name
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Employees API error:', err.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/departments', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        d.department_id,
+        d.department_name,
+        d.description,
+        d.status,
+        d.budget_annual,
+        d.location_building,
+        d.parent_department_id,
+        d.department_head_id,
+        COUNT(e.employee_id) AS employee_count,
+        head.first_name AS head_first_name,
+        head.last_name AS head_last_name
+      FROM departments d
+      LEFT JOIN employees e ON d.department_id = e.department_id
+      LEFT JOIN employees head ON d.department_head_id = head.employee_id
+      GROUP BY d.department_id, head.first_name, head.last_name
+      ORDER BY d.department_name
+    `);
+    res.json({ success: true, departments: result.rows });
+  } catch (err) {
+    console.error('Departments API error:', err.message);
+    res.json({ success: true, departments: [] });
+  }
+});
 
 // ===== Dashboard Data APIs =====
 app.get('/api/alerts', async (req, res) => {
@@ -335,6 +415,229 @@ app.delete('/api/notifications', async (req, res) => {
   } catch (err) {
     console.error('Clear notifications API error:', err.message);
     res.json({ success: true, count: 0 });
+  }
+});
+
+// ===== Employee Reports APIs (admin format) =====
+app.get('/api/employee-reports', async (req, res) => {
+  try {
+    const { search, status, severity, reportType, department, page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+    let query = 'SELECT * FROM employee_reports WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) as count FROM employee_reports WHERE 1=1';
+    const params = [];
+
+    if (search) {
+      query += ` AND (employee_name ILIKE $${params.length + 1} OR department_name ILIKE $${params.length + 1} OR title ILIKE $${params.length + 1})`;
+      countQuery += ` AND (employee_name ILIKE $${params.length + 1} OR department_name ILIKE $${params.length + 1} OR title ILIKE $${params.length + 1})`;
+      params.push(`%${search}%`);
+    }
+
+    if (status) {
+      query += ` AND status = $${params.length + 1}`;
+      countQuery += ` AND status = $${params.length + 1}`;
+      params.push(status);
+    }
+
+    if (severity) {
+      query += ` AND severity = $${params.length + 1}`;
+      countQuery += ` AND severity = $${params.length + 1}`;
+      params.push(severity);
+    }
+
+    if (reportType) {
+      query += ` AND report_type = $${params.length + 1}`;
+      countQuery += ` AND report_type = $${params.length + 1}`;
+      params.push(reportType);
+    }
+
+    if (department) {
+      query += ` AND department_id = $${params.length + 1}`;
+      countQuery += ` AND department_id = $${params.length + 1}`;
+      params.push(department);
+    }
+
+    const countResult = await pool.query(countQuery, params);
+    const total = parseInt(countResult.rows[0]?.count, 10) || 0;
+
+    query += ` ORDER BY report_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    const result = await pool.query(query, [...params, parseInt(limit, 10), offset]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        pages: Math.max(1, Math.ceil(total / parseInt(limit, 10)))
+      }
+    });
+  } catch (err) {
+    console.error('Employee reports API error:', err.message);
+    res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 10, pages: 1 } });
+  }
+});
+
+app.get('/api/employee-reports/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM employee_reports WHERE report_id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Report not found' });
+    }
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/employee-reports', async (req, res) => {
+  try {
+    const {
+      employee_id, employee_name, department_id, department_name,
+      report_type, category, title, description, reported_by,
+      severity, priority
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO employee_reports
+      (employee_id, employee_name, department_id, department_name, report_type, category, title, description, reported_by, severity, priority, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Open')
+      RETURNING *`,
+      [employee_id, employee_name, department_id || null, department_name || null, report_type, category, title, description, reported_by || 'System', severity || 'Medium', priority || 'Normal']
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/employee-reports/:id/resolve', async (req, res) => {
+  try {
+    const { resolution_notes, action_taken } = req.body;
+    const result = await pool.query(
+      `UPDATE employee_reports
+       SET status = 'Resolved', resolution_notes = $1, action_taken = $2, resolution_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE report_id = $3
+       RETURNING *`,
+      [resolution_notes || null, action_taken || null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Report not found' });
+    }
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/employee-reports/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM employee_reports WHERE report_id = $1 RETURNING report_id', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Report not found' });
+    }
+    return res.json({ success: true, message: 'Report deleted' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ===== Feedback APIs (admin format) =====
+app.get('/api/feedback', async (req, res) => {
+  try {
+    const { search, status, type, rating } = req.query;
+    let query = 'SELECT * FROM feedback WHERE 1=1';
+    const params = [];
+
+    if (search) {
+      query += ` AND (subject ILIKE $${params.length + 1} OR message ILIKE $${params.length + 1} OR user_email ILIKE $${params.length + 1})`;
+      params.push(`%${search}%`);
+    }
+    if (status) {
+      query += ` AND status = $${params.length + 1}`;
+      params.push(status);
+    }
+    if (type) {
+      query += ` AND feedback_type = $${params.length + 1}`;
+      params.push(type);
+    }
+    if (rating) {
+      query += ` AND (rating = $${params.length + 1} OR app_rating = $${params.length + 1})`;
+      params.push(parseInt(rating, 10));
+    }
+
+    query += ' ORDER BY created_at DESC';
+    const result = await pool.query(query, params);
+    res.json({ success: true, feedback: result.rows });
+  } catch (err) {
+    console.error('Feedback API error:', err.message);
+    res.json({ success: true, feedback: [] });
+  }
+});
+
+app.get('/api/feedback/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM feedback WHERE id = $1 LIMIT 1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Feedback not found' });
+    }
+    return res.json({ success: true, feedback: result.rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { feedback_type, subject, message, rating, app_rating, user_email, status, priority } = req.body;
+    const result = await pool.query(
+      `INSERT INTO feedback (feedback_type, subject, message, rating, app_rating, user_email, status, priority)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 'Open'), COALESCE($8, 'Normal'))
+       RETURNING *`,
+      [feedback_type, subject, message, rating || null, app_rating || rating || null, user_email || null, status || null, priority || null]
+    );
+    res.status(201).json({ success: true, feedback: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/feedback/:id', async (req, res) => {
+  try {
+    const { status, priority, response_notes } = req.body;
+    const result = await pool.query(
+      `UPDATE feedback
+       SET status = COALESCE($1, status),
+           priority = COALESCE($2, priority),
+           response_notes = COALESCE($3, response_notes),
+           response_date = CASE WHEN $3 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE response_date END,
+           responded_by = CASE WHEN $3 IS NOT NULL THEN 'Admin' ELSE responded_by END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [status || null, priority || null, response_notes || null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Feedback not found' });
+    }
+    return res.json({ success: true, feedback: result.rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM feedback WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Feedback not found' });
+    }
+    return res.json({ success: true, message: 'Feedback deleted successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
