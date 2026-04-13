@@ -181,7 +181,7 @@ router.get('/', verifyToken, async (req, res) => {
 // POST /api/employee-reports - Submit employee report
 router.post('/employee-reports', verifyToken, async (req, res) => {
   try {
-    const { employeeId, departmentName, reportType, title, description, severity } = req.body;
+    const { employeeId, employeeName, departmentName, departmentId, reportType, category, title, description, severity } = req.body;
     const patientId = req.userId;
 
     // Validation
@@ -192,18 +192,41 @@ router.post('/employee-reports', verifyToken, async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      `INSERT INTO employee_reports 
-       (employee_id, department_name, report_type, title, description, severity, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-       RETURNING id`,
-      [employeeId, departmentName, reportType, title, description, severity || 'medium', patientId]
-    );
+    const normalizedEmployeeName = employeeName || `Employee ${employeeId}`;
+    const normalizedCategory = category || reportType || 'Other';
+    const normalizedSeverity = severity || 'Medium';
+
+    let reportId;
+    try {
+      // Newer schema (database/database.sql)
+      const result = await pool.query(
+        `INSERT INTO employee_reports 
+         (employee_id, employee_name, department_id, department_name, report_type, category, title, description, severity, reported_by_id, report_date, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING report_id`,
+        [employeeId, normalizedEmployeeName, departmentId || null, departmentName, reportType, normalizedCategory, title, description, normalizedSeverity, patientId]
+      );
+      reportId = result.rows[0].report_id;
+    } catch (schemaErr) {
+      // Legacy schema fallback (database/schema.sql)
+      if (schemaErr.code !== '42703') {
+        throw schemaErr;
+      }
+
+      const fallbackResult = await pool.query(
+        `INSERT INTO employee_reports 
+         (employee_id, department_name, report_type, title, description, severity, created_by, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING id`,
+        [employeeId, departmentName, reportType, title, description, (normalizedSeverity || 'medium').toLowerCase(), patientId]
+      );
+      reportId = fallbackResult.rows[0].id;
+    }
 
     res.status(201).json({
       success: true,
       message: 'Report submitted successfully',
-      id: result.rows[0].id,
+      id: reportId,
     });
   } catch (error) {
     console.error('Error submitting report:', error);

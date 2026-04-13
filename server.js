@@ -140,6 +140,7 @@ import passwordRoutes from './routes/password.js';
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/readings', readingsRoutes);
+app.use('/api/feedback', feedbackRoutes);
 app.use('/api/password', passwordRoutes);
 
 // ===== Core Admin APIs =====
