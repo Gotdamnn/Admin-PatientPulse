@@ -70,14 +70,13 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl requests, etc)
     if (!origin) return callback(null, true);
-    
-    // Development: Allow all localhost/127.0.0.1 ports
-    if (process.env.NODE_ENV === 'development') {
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        return callback(null, true);
-      }
+
+    // Allow local Flutter/web dev hosts on any port.
+    // This keeps local web/mobile testing working against Azure APIs.
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
     }
-    
+
     // Production: Check against CORS_ORIGIN list
     const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
     if (allowedOrigins.includes(origin)) {
