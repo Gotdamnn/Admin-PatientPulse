@@ -35,6 +35,8 @@ console.log();
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
+const publicPath = resolve(__dirname, 'public');
+const viewsPath = resolve(__dirname, 'views');
 
 // Database connection pool
 export const pool = new Pool({
@@ -79,6 +81,14 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.set('view engine', 'ejs');
+app.set('views', viewsPath);
+app.use(express.static(publicPath));
+
+// Favicon route to avoid noisy 404 logs.
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -108,6 +118,20 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/employee-reports', employeeReportsRoutes);
 app.use('/api/password', passwordRoutes);
+
+// ============= Web View Routes =============
+app.get('/', (req, res) => res.redirect('/login'));
+app.get('/dashboard', (req, res) => res.render('dashboard', { title: 'Dashboard', activePage: 'dashboard' }));
+app.get('/login', (req, res) => res.render('login', { title: 'Login' }));
+app.get('/patients', (req, res) => res.render('patient', { title: 'Patients', activePage: 'patients' }));
+app.get('/devices', (req, res) => res.render('devices', { title: 'Devices', activePage: 'devices' }));
+app.get('/employees', (req, res) => res.render('employees', { title: 'Employees', activePage: 'employees' }));
+app.get('/employee-reports', (req, res) => res.render('employee-reports', { title: 'Employee Reports', activePage: 'employee-reports' }));
+app.get('/feedback', (req, res) => res.render('feedback', { title: 'User Feedback', activePage: 'feedback' }));
+app.get('/departments', (req, res) => res.render('departments', { title: 'Departments', activePage: 'departments' }));
+app.get('/settings', (req, res) => res.render('settings', { title: 'Settings', activePage: 'settings' }));
+app.get('/audit-logs', (req, res) => res.render('audit-logs', { title: 'Audit Logs', activePage: 'audit-logs' }));
+app.get('/staff-management', (req, res) => res.render('rbac-management', { title: 'Staff Management', activePage: 'staff-management' }));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
