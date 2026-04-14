@@ -817,16 +817,24 @@ function getLanIpv4Addresses() {
 
 // Start server
 
-// RBAC module import and initialization
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const rbac = require('./src/rbac.js');
-rbac.setPool(pool);
 
-// RBAC API routes
+// RBAC module import and initialization (ESM)
+import {
+  setPool as rbacSetPool,
+  getAllPermissionsGrouped,
+  getAllAdminsWithRoles,
+  getUserPermissions,
+  getUserRoles,
+  hasPermission
+} from './src/rbac.js';
+
+rbacSetPool(pool);
+
+
+// RBAC API routes (ESM)
 app.get('/api/rbac/permissions', async (req, res) => {
   try {
-    const grouped = await rbac.getAllPermissionsGrouped();
+    const grouped = await getAllPermissionsGrouped();
     res.json({ success: true, permissions: grouped });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -835,7 +843,7 @@ app.get('/api/rbac/permissions', async (req, res) => {
 
 app.get('/api/rbac/admins', async (req, res) => {
   try {
-    const admins = await rbac.getAllAdminsWithRoles();
+    const admins = await getAllAdminsWithRoles();
     res.json({ success: true, admins });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -844,7 +852,7 @@ app.get('/api/rbac/admins', async (req, res) => {
 
 app.get('/api/rbac/user/:adminId/permissions', async (req, res) => {
   try {
-    const perms = await rbac.getUserPermissions(Number(req.params.adminId));
+    const perms = await getUserPermissions(Number(req.params.adminId));
     res.json({ success: true, permissions: perms });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -853,7 +861,7 @@ app.get('/api/rbac/user/:adminId/permissions', async (req, res) => {
 
 app.get('/api/rbac/user/:adminId/roles', async (req, res) => {
   try {
-    const roles = await rbac.getUserRoles(Number(req.params.adminId));
+    const roles = await getUserRoles(Number(req.params.adminId));
     res.json({ success: true, roles });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -863,7 +871,7 @@ app.get('/api/rbac/user/:adminId/roles', async (req, res) => {
 app.post('/api/rbac/check-permission', async (req, res) => {
   try {
     const { adminId, userEmail, permissionKey } = req.body;
-    const hasPerm = await rbac.hasPermission(Number(adminId), userEmail, permissionKey);
+    const hasPerm = await hasPermission(Number(adminId), userEmail, permissionKey);
     res.json({ success: true, hasPermission: hasPerm });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
