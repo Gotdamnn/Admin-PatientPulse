@@ -102,13 +102,31 @@ async function loadRecentActivity() {
         
         // Add dashboard activities
         if (dashResponse.ok) {
-            const dashActivities = await dashResponse.json();
+            const dashData = await dashResponse.json();
+            // Defensive: extract activities array from response
+            let dashActivities = [];
+            if (Array.isArray(dashData)) {
+                dashActivities = dashData;
+            } else if (dashData && Array.isArray(dashData.activities)) {
+                dashActivities = dashData.activities;
+            } else {
+                console.warn('Dashboard activities response is not an array:', dashData);
+            }
             activities = activities.concat(dashActivities.map(a => ({ ...a, source: 'dashboard' })));
         }
         
         // Add authentication activities from audit logs
         if (auditResponse.ok) {
-            const auditLogs = await auditResponse.json();
+            const auditData = await auditResponse.json();
+            // Defensive: extract logs array from response
+            let auditLogs = [];
+            if (Array.isArray(auditData)) {
+                auditLogs = auditData;
+            } else if (auditData && Array.isArray(auditData.logs)) {
+                auditLogs = auditData.logs;
+            } else {
+                console.warn('Audit response is not an array or missing logs property:', auditData);
+            }
             activities = activities.concat(auditLogs.map(log => ({
                 type: log.action === 'Login' ? 'login' : 'logout',
                 title: log.action === 'Login' ? 'User Logged In' : 'User Logged Out',
@@ -151,6 +169,7 @@ async function loadRecentActivity() {
         
     } catch (error) {
         console.error('Error loading recent activity:', error);
+        console.error('Full error details:', error);
         activityList.innerHTML = `
             <li>
                 <span class="activity-dot dot-red"></span>

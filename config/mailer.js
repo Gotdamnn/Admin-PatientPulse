@@ -1,11 +1,14 @@
 
+const nodemailer = require('nodemailer');
+
+let transporter;
+
 if (process.env.NODE_ENV === 'test') {
-    module.exports = {
+    transporter = {
         sendMail: async () => ({ success: true, message: 'Email sending skipped in test' })
     };
 } else {
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
+    transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
         port: process.env.SMTP_PORT || 587,
         secure: false, // Use TLS (true would use SSL/465)
@@ -31,6 +34,6 @@ if (process.env.NODE_ENV === 'test') {
             console.log('   SMTP User:', process.env.SMTP_USER);
         }
     });
-
-    module.exports = transporter;
 }
+
+module.exports = transporter;

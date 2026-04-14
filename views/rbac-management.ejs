@@ -971,26 +971,37 @@
                     throw new Error(`Failed to fetch admins: ${adminResponse.status}`);
                 }
                 const adminData = await adminResponse.json();
-                allAdmins = adminData.admins || [];
-                
+                if (!Array.isArray(adminData.admins)) {
+                    console.warn('Admins response is not an array:', adminData.admins);
+                    allAdmins = [];
+                } else {
+                    allAdmins = adminData.admins;
+                }
                 // Fetch all staff
                 const staffResponse = await fetch('/api/staff');
                 if (!staffResponse.ok) {
                     throw new Error(`Failed to fetch staff: ${staffResponse.status}`);
                 }
                 const staffData = await staffResponse.json();
-                const allStaff = staffData.staff || [];
-                
+                let allStaff = [];
+                if (Array.isArray(staffData.staff)) {
+                    allStaff = staffData.staff;
+                } else if (Array.isArray(staffData)) {
+                    allStaff = staffData;
+                } else {
+                    console.warn('Staff response is not an array:', staffData);
+                }
                 // Merge: combine admins and pure staff records (staff not in admin table)
                 const adminEmails = new Set(allAdmins.map(a => a.email));
                 const pureStaffMembers = allStaff.filter(s => !adminEmails.has(s.email));
-                
                 // Combine for rendering
                 window.allStaffMembers = [...allAdmins, ...pureStaffMembers];
                 renderStaffTable();
             } catch (err) {
                 console.error('Error loading staff members:', err);
                 showAlert('Error loading staff members: ' + err.message, 'error');
+                window.allStaffMembers = [];
+                renderStaffTable();
             } finally {
                 hideLoading();
             }
@@ -1001,9 +1012,17 @@
             try {
                 const response = await fetch('/api/rbac/permissions');
                 const data = await response.json();
-                allPermissions = data.grouped || {};
+                if (data && typeof data.grouped === 'object' && data.grouped !== null) {
+                    allPermissions = data.grouped;
+                } else if (data && typeof data.permissions === 'object' && data.permissions !== null) {
+                    allPermissions = data.permissions;
+                } else {
+                    console.warn('Permissions response is not an object:', data);
+                    allPermissions = {};
+                }
             } catch (err) {
                 console.error('Error loading permissions:', err);
+                allPermissions = {};
             }
         }
 
@@ -1012,7 +1031,11 @@
             const tbody = document.getElementById('staffTableBody');
             tbody.innerHTML = '';
 
-            const staffMembers = window.allStaffMembers || allAdmins || [];
+            let staffMembers = window.allStaffMembers || allAdmins || [];
+            if (!Array.isArray(staffMembers)) {
+                console.warn('renderStaffTable called with non-array:', staffMembers);
+                staffMembers = [];
+            }
 
             for (const member of staffMembers) {
                 const row = document.createElement('tr');

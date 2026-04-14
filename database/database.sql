@@ -63,6 +63,22 @@ CREATE INDEX IF NOT EXISTS idx_device_vitals_device_id ON device_vitals(device_i
 CREATE INDEX IF NOT EXISTS idx_device_vitals_patient_id ON device_vitals(patient_id);
 CREATE INDEX IF NOT EXISTS idx_device_vitals_recorded_at ON device_vitals(recorded_at);
 
+-- Patient Vitals table (for temperature readings submitted via mobile app)
+CREATE TABLE IF NOT EXISTS patient_vitals (
+    id SERIAL PRIMARY KEY,
+    patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE NOT NULL,
+    body_temperature DECIMAL(5, 2) NOT NULL,
+    location VARCHAR(255),
+    device_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_patient_temperature CHECK (body_temperature >= 30 AND body_temperature <= 45)
+);
+
+-- Create index for faster queries on patient_id and created_at
+CREATE INDEX IF NOT EXISTS idx_patient_vitals_patient_id ON patient_vitals(patient_id);
+CREATE INDEX IF NOT EXISTS idx_patient_vitals_created_at ON patient_vitals(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id SERIAL PRIMARY KEY,
     patient_id INTEGER REFERENCES patients(id) ON DELETE SET NULL,
