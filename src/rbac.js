@@ -301,8 +301,8 @@ async function getAllAdminsWithRoles() {
     }
 }
 
-// Export functions
-module.exports = {
+// Export functions (ES module syntax)
+export {
     setPool,
     SUPER_ADMIN_EMAIL,
     isSuperAdmin,
