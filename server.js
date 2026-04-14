@@ -232,6 +232,117 @@ app.get('/api/rbac/admins', async (req, res) => {
   }
 });
 
+// Staff Management API Routes
+app.get('/api/staff', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, name, role, department, status, created_at FROM staff ORDER BY email'
+    );
+    res.json({ success: true, staff: result.rows || [] });
+  } catch (err) {
+    console.error('Staff API error:', err.message);
+    res.json({ success: true, staff: [] });
+  }
+});
+
+app.post('/api/staff', async (req, res) => {
+  try {
+    const { email, name, role, department, status } = req.body;
+    if (!email || !name || !role) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: email, name, role' });
+    }
+    const result = await pool.query(
+      'INSERT INTO staff (email, name, role, department, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [email, name, role, department || null, status || 'Active']
+    );
+    res.status(201).json({ success: true, staff: result.rows[0] });
+  } catch (err) {
+    console.error('Create staff error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/staff/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, role, department, status } = req.body;
+    const email = req.query.email;
+    
+    // Use email parameter for lookup if provided
+    let query, params;
+    if (email) {
+      query = 'UPDATE staff SET name = $1, role = $2, department = $3, status = $4 WHERE email = $5 RETURNING *';
+      params = [name || null, role || null, department || null, status || null, email];
+    } else {
+      query = 'UPDATE staff SET name = $1, role = $2, department = $3, status = $4 WHERE id = $5 RETURNING *';
+      params = [name || null, role || null, department || null, status || null, id];
+    }
+    
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Staff member not found' });
+    }
+    res.json({ success: true, staff: result.rows[0] });
+  } catch (err) {
+    console.error('Update staff error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/staff/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const email = req.query.email;
+    
+    // Use email parameter for lookup if provided
+    let query, params;
+    if (email) {
+      query = 'DELETE FROM staff WHERE email = $1 RETURNING id';
+      params = [email];
+    } else {
+      query = 'DELETE FROM staff WHERE id = $1 RETURNING id';
+      params = [id];
+    }
+    
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Staff member not found' });
+    }
+    res.json({ success: true, message: 'Staff member deleted' });
+  } catch (err) {
+    console.error('Delete staff error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Staff Permissions API
+app.get('/api/staff/:id/permissions', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const email = req.query.email;
+    
+    const staffResult = await pool.query(
+      'SELECT * FROM staff WHERE id = $1 OR ($2::text IS NOT NULL AND email = $2) LIMIT 1',
+      [id, email]
+    );
+    
+    if (staffResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Staff member not found' });
+    }
+    
+    const staff = staffResult.rows[0];
+    const permResult = await pool.query(
+      'SELECT permission_id, permission_name, permission_key, description, category, permission_type FROM permissions LEFT JOIN staff_permissions sp ON permissions.permission_id = sp.permission_id AND sp.staff_id = $1 ORDER BY category, permission_name',
+      [staff.id]
+    );
+    
+    res.json({ success: true, staff: { ...staff, permissions: permResult.rows } });
+  } catch (err) {
+    console.error('Staff permissions error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/employees', async (req, res) => {
   try {
     const result = await pool.query(`
