@@ -250,7 +250,9 @@ async function loadEmployees() {
         if (!response.ok) {
             throw new Error('Failed to fetch employees');
         }
-        employees = await response.json();
+        const data = await response.json();
+        // Ensure we always pass an array to renderEmployees
+        employees = Array.isArray(data.employees) ? data.employees : [];
         currentPage = 1;
         renderEmployees(employees);
     } catch (error) {
@@ -291,7 +293,8 @@ function renderEmployees(employeeList) {
 
     const start = (currentPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
-    const paginatedEmployees = employeeList.slice(start, end);
+    // Defensive: ensure employeeList is always an array
+    const paginatedEmployees = Array.isArray(employeeList) ? employeeList.slice(start, end) : [];
 
     // Update pagination
     updateEmployeePagination(currentPage, totalPages);
