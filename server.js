@@ -170,6 +170,68 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
+// RBAC API Routes
+app.get('/api/rbac/permissions', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT permission_id, permission_name, permission_key, description, category FROM permissions ORDER BY category, permission_name'
+    );
+    // Group by category
+    const grouped = {};
+    result.rows.forEach(perm => {
+      if (!grouped[perm.category]) {
+        grouped[perm.category] = [];
+      }
+      grouped[perm.category].push(perm);
+    });
+    res.json({ success: true, permissions: grouped });
+  } catch (err) {
+    console.error('Permissions API error:', err.message);
+    res.json({ success: true, permissions: {} });
+  }
+});
+
+app.get('/api/rbac/admins', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT a.id, a.email, a.name, a.created_at,
+              r.role_id, r.role_name, r.is_locked,
+              s.department, s.status
+       FROM admins a
+       LEFT JOIN admin_roles ar ON a.id = ar.admin_id
+       LEFT JOIN roles r ON ar.role_id = r.role_id
+       LEFT JOIN staff s ON a.email = s.email
+       ORDER BY a.email, r.role_name`
+    );
+    // Group by admin
+    const admins = {};
+    result.rows.forEach(row => {
+      if (!admins[row.id]) {
+        admins[row.id] = {
+          id: row.id,
+          email: row.email,
+          name: row.name,
+          created_at: row.created_at,
+          department: row.department || 'N/A',
+          status: row.status || 'Active',
+          roles: []
+        };
+      }
+      if (row.role_id) {
+        admins[row.id].roles.push({
+          role_id: row.role_id,
+          role_name: row.role_name,
+          is_locked: row.is_locked
+        });
+      }
+    });
+    res.json({ success: true, admins: Object.values(admins) });
+  } catch (err) {
+    console.error('Admins API error:', err.message);
+    res.json({ success: true, admins: [] });
+  }
+});
+
 app.get('/api/employees', async (req, res) => {
   try {
     const result = await pool.query(`
