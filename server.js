@@ -403,10 +403,10 @@ app.get('/api/audit-logs', async (req, res) => {
       created_at: row.created_at || row.timestamp || row.event_time,
       timestamp: row.created_at || row.timestamp || row.event_time
     }));
-    res.json(normalized);
+    res.json({ success: true, logs: normalized });
   } catch (err) {
     console.error('Audit logs API error:', err.message);
-    res.json([]);
+    res.json({ success: true, logs: [] });
   }
 });
 

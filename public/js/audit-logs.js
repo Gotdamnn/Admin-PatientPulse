@@ -158,8 +158,16 @@ function loadAuditLogs() {
                 return response.json();
             })
             .then(data => {
-                // Extract logs array from response
-                auditLogs = Array.isArray(data) ? data : (data.logs || []);
+                // Defensive: extract logs array from response
+                let logsArr = [];
+                if (Array.isArray(data)) {
+                    logsArr = data;
+                } else if (data && Array.isArray(data.logs)) {
+                    logsArr = data.logs;
+                } else {
+                    console.warn('Audit logs response is not an array or missing logs property:', data);
+                }
+                auditLogs = logsArr;
 
                 // Sort by timestamp descending
                 auditLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));

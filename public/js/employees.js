@@ -216,10 +216,17 @@ async function loadDepartments() {
             throw new Error('Failed to fetch departments');
         }
         const data = await response.json();
-        departments = data.departments || [];
+        if (!Array.isArray(data.departments)) {
+            console.warn('Departments response is not an array:', data.departments);
+            departments = [];
+        } else {
+            departments = data.departments;
+        }
         populateDepartmentDropdowns();
     } catch (error) {
         console.error('Error loading departments:', error);
+        departments = [];
+        populateDepartmentDropdowns();
     }
 }
 
@@ -250,11 +257,23 @@ async function loadEmployees() {
         if (!response.ok) {
             throw new Error('Failed to fetch employees');
         }
-        employees = await response.json();
+            const data = await response.json();
+            // Defensive: ensure we always pass an array to renderEmployees
+            let employeesArr = [];
+            if (Array.isArray(data.employees)) {
+                employeesArr = data.employees;
+            } else if (Array.isArray(data)) {
+                employeesArr = data;
+            } else {
+                console.warn('Employees response is not an array:', data);
+            }
+            employees = employeesArr;
         currentPage = 1;
         renderEmployees(employees);
     } catch (error) {
         console.error('Error loading employees:', error);
+        employees = [];
+        renderEmployees([]);
         showStatusModal('Error', 'Failed to load employees. Please make sure the server is running.', 'error');
     }
 }
@@ -263,6 +282,12 @@ async function loadEmployees() {
 function renderEmployees(employeeList) {
     const tbody = document.getElementById('employeesTableBody');
     if (!tbody) return;
+
+    // Defensive: ensure employeeList is an array
+    if (!Array.isArray(employeeList)) {
+        console.warn('renderEmployees called with non-array:', employeeList);
+        employeeList = [];
+    }
 
     // Update employee count
     const employeeCountEl = document.getElementById('employeeCount');
