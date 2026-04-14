@@ -129,4 +129,52 @@ router.put('/profile', verifyToken, async (req, res) => {
   }
 });
 
+// DELETE /api/users/:id - Delete a user (patient)
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    // Only allow users to delete their own account or if they're an admin
+    // For now, we'll allow deletion of own account
+    if (parseInt(id) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: Can only delete your own account',
+      });
+    }
+
+    // Check if patient exists
+    const patientCheck = await pool.query(
+      'SELECT id FROM patients WHERE id = $1',
+      [id]
+    );
+
+    if (patientCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found',
+      });
+    }
+
+    // Delete patient and related data will be cascaded
+    await pool.query(
+      'DELETE FROM patients WHERE id = $1',
+      [id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Patient account deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting patient:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete patient',
+      error: error.message,
+    });
+  }
+});
+
 export default router;

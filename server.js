@@ -160,6 +160,28 @@ app.get('/api/patients', async (req, res) => {
   }
 });
 
+// Get single patient by ID
+app.get('/api/patients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT p.*, 
+              (SELECT body_temperature FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS body_temperature,
+              (SELECT created_at FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS last_visit
+       FROM patients p
+       WHERE p.id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+    res.json({ success: true, patient: result.rows[0] });
+  } catch (err) {
+    console.error('Get patient error:', err.message);
+    res.status(500).json({ success: false, message: 'Error fetching patient' });
+  }
+});
+
 app.get('/api/devices', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM devices ORDER BY id DESC');
