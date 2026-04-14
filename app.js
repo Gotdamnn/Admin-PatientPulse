@@ -3,10 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-const rbac = require('./src/rbac');
 const { initializeEmailRoutes } = require('./src/email-verification-routes');
 const { initializePasswordResetRoutes } = require('./src/password-reset-routes');
 const { sendVerificationEmail } = require('./config/email-service');
+
+// rbac will be imported dynamically when needed in routes
 
 // Import the database pool from server.js
 let pool;
