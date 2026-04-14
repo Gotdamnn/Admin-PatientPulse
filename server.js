@@ -148,8 +148,8 @@ app.get('/api/patients', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT p.*, 
-              (SELECT body_temperature FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY recorded_at DESC LIMIT 1) AS latest_temperature,
-              (SELECT recorded_at FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY recorded_at DESC LIMIT 1) AS temperature_recorded_at
+              (SELECT body_temperature FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS body_temperature,
+              (SELECT created_at FROM patient_vitals WHERE patient_id = p.id AND body_temperature IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS last_visit
        FROM patients p
        ORDER BY p.created_at DESC`
     );
